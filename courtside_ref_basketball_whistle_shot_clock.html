@@ -1,0 +1,1518 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>CourtSide Ref — Whistle, Shot Clock & Scorekeeper</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Chakra+Petch:ital,wght@0,600;0,700;1,700&family=Inter:wght@500;600;700;800&display=swap" rel="stylesheet">
+  <style>
+    /* Courtside high-contrast OLED palette & instant touch optimization */
+    :root {
+      --bg-oled: #050505;
+      --surface-card: #0c0c0e;
+      --surface-elevated: #16161a;
+      --border-subtle: #26262c;
+      --led-amber: #ff9f1c;
+      --led-amber-glow: rgba(255, 159, 28, 0.35);
+      --led-red: #ff2a3c;
+      --led-red-glow: rgba(255, 42, 60, 0.45);
+      --led-green: #10b981;
+    }
+
+    * {
+      box-sizing: border-box;
+      -webkit-tap-highlight-color: transparent;
+      touch-action: manipulation;
+      user-select: none;
+      -webkit-user-select: none;
+    }
+
+    #whistleBtn {
+      touch-action: none;
+    }
+
+    html, body {
+      margin: 0;
+      padding: 0;
+      width: 100%;
+      height: 100dvh;
+      overflow: hidden;
+      background-color: var(--bg-oled);
+      color: #ffffff;
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+    }
+
+    .font-led {
+      font-family: 'Chakra Petch', monospace;
+      font-variant-numeric: tabular-nums;
+    }
+
+    /* LED Glow effects for outdoor readability */
+    .glow-amber {
+      color: var(--led-amber);
+      text-shadow: 0 0 22px var(--led-amber-glow);
+    }
+
+    .glow-red {
+      color: var(--led-red);
+      text-shadow: 0 0 28px var(--led-red-glow);
+    }
+
+    @keyframes amberUrgencyPulse {
+      0%, 100% {
+        text-shadow: 0 0 16px rgba(255, 159, 28, 0.35);
+        opacity: 1;
+      }
+      50% {
+        text-shadow: 0 0 34px rgba(255, 159, 28, 0.85);
+        opacity: 0.82;
+      }
+    }
+
+    .pulse-amber-urgent {
+      color: var(--led-amber);
+      animation: amberUrgencyPulse 0.55s ease-in-out infinite;
+    }
+
+    /* Tactile Whistle Button & Acoustic Pulse Ring */
+    .whistle-btn {
+      background: radial-gradient(circle at 50% 25%, #ff4757 0%, #d90429 62%, #8f0019 100%);
+      box-shadow:
+        0 12px 36px rgba(255, 42, 60, 0.42),
+        inset 0 2px 4px rgba(255, 255, 255, 0.42),
+        inset 0 -8px 16px rgba(0, 0, 0, 0.55);
+      transition: transform 0.06s cubic-bezier(0.2, 0, 0, 1), box-shadow 0.06s ease;
+    }
+
+    .whistle-btn.active,
+    .whistle-btn:active {
+      transform: scale(0.965);
+      background: radial-gradient(circle at 50% 40%, #ff6b7a 0%, #ff1e32 70%, #b8001f 100%);
+      box-shadow:
+        0 0 54px rgba(255, 42, 60, 0.9),
+        inset 0 4px 10px rgba(0, 0, 0, 0.48);
+    }
+
+    @keyframes pulseRing {
+      0% {
+        transform: scale(0.97);
+        opacity: 0.85;
+      }
+      100% {
+        transform: scale(1.14);
+        opacity: 0;
+      }
+    }
+
+    .pulse-ring-active {
+      animation: pulseRing 0.55s cubic-bezier(0.16, 1, 0.3, 1) infinite;
+    }
+
+    @keyframes doubleTweetBadgePop {
+      0% {
+        transform: scale(0.85);
+        opacity: 0;
+      }
+      18% {
+        transform: scale(1.04);
+        opacity: 1;
+      }
+      82% {
+        transform: scale(1);
+        opacity: 1;
+      }
+      100% {
+        transform: scale(0.95);
+        opacity: 0;
+      }
+    }
+
+    .badge-pop-active {
+      animation: doubleTweetBadgePop 0.65s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+    }
+
+    @keyframes buzzerFlash {
+      0%, 100% { background-color: #050505; }
+      50% { background-color: rgba(255, 42, 60, 0.32); }
+    }
+
+    .buzzer-alert {
+      animation: buzzerFlash 0.25s ease-in-out 4;
+    }
+
+    /* Native iOS-style horizontal pagination container */
+    .pager-track {
+      display: flex;
+      width: 100%;
+      flex: 1;
+      min-height: 0;
+      overflow-x: auto;
+      overflow-y: hidden;
+      scroll-snap-type: x mandatory;
+      scroll-behavior: smooth;
+      scrollbar-width: none;
+      -ms-overflow-style: none;
+    }
+
+    .pager-track::-webkit-scrollbar {
+      display: none;
+    }
+
+    .pager-slide {
+      flex: 0 0 100%;
+      width: 100%;
+      height: 100%;
+      scroll-snap-align: start;
+      scroll-snap-stop: always;
+    }
+
+    /* Tactile button press states */
+    .tactile-btn {
+
+      0% { transform: translateX(0); opacity: 0.9; }
+      100% { transform: translateX(-18px); opacity: 0; }
+    }
+
+    @keyframes swipeFlashRight {
+      0% { transform: translateX(0); opacity: 0.9; }
+      100% { transform: translateX(18px); opacity: 0; }
+    }
+
+    .swipe-anim-left {
+      animation: swipeFlashLeft 0.35s ease-out forwards;
+    }
+
+    .swipe-anim-right {
+      animation: swipeFlashRight 0.35s ease-out forwards;
+    }
+
+    @keyframes buzzerFlash {
+      0%, 100% { background-color: #050505; }
+      50% { background-color: rgba(255, 42, 60, 0.32); }
+    }
+
+    .buzzer-alert {
+      animation: buzzerFlash 0.25s ease-in-out 4;
+    }
+
+    /* Tactile button press states */
+    .tactile-btn {
+      transition: transform 0.06s ease, background-color 0.1s ease, border-color 0.1s ease;
+    }
+    .tactile-btn:active {
+      transform: scale(0.95);
+    }
+  </style>
+</head>
+<body class="flex flex-col justify-between p-3 sm:p-4 max-w-lg mx-auto select-none">
+
+  <!-- TOP UTILITY BAR -->
+  <header class="flex items-center justify-between gap-2 pb-1 shrink-0">
+    <div class="flex items-center gap-2">
+      <div class="w-2.5 h-2.5 rounded-full bg-[#ff9f1c] shadow-[0_0_8px_#ff9f1c]"></div>
+      <span class="text-xs sm:text-sm font-extrabold tracking-wider uppercase text-zinc-100">
+        CourtSide <span class="text-[#ff9f1c]">Ref</span>
+      </span>
+    </div>
+
+    <div class="flex items-center gap-2">
+      <!-- Wake Lock Toggle -->
+      <button id="wakeLockBtn" type="button"
+        class="tactile-btn flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-zinc-900 border border-zinc-800 text-[11px] font-bold uppercase tracking-wide text-zinc-400 hover:border-zinc-700"
+        title="Keep Screen Awake">
+        <span id="wakeDot" class="w-2 h-2 rounded-full bg-zinc-600"></span>
+        <span>Awake</span>
+      </button>
+
+      <!-- Audio Status / Mute Toggle -->
+      <button id="audioToggleBtn" type="button"
+        class="tactile-btn flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-zinc-900 border border-zinc-800 text-[11px] font-bold uppercase tracking-wide text-zinc-200 hover:border-zinc-700"
+        title="Toggle Sound">
+        <span id="audioIcon" class="text-emerald-400">🔊</span>
+        <span id="audioLabel">Audio Ready</span>
+      </button>
+    </div>
+  </header>
+
+  <!-- HORIZONTAL TWO-PAGE TRACK (PAGE 1: REF & CLOCK | PAGE 2: SCOREBOARD) -->
+  <main id="pagerTrack" class="pager-track">
+
+    <!-- ======================================================================= -->
+    <!-- PAGE 1: WHISTLE TONE, SHOT CLOCK & WHISTLE PAD                          -->
+    <!-- ======================================================================= -->
+    <div class="pager-slide flex flex-col justify-between gap-2.5 pr-0.5">
+      <!-- WHISTLE SOUND SELECTOR BAR (4 SYNTHESIZED PROFILES) -->
+      <section aria-label="Whistle Sound Selector" class="shrink-0">
+        <div class="flex items-center justify-between mb-1.5 px-0.5">
+          <span class="text-[10px] font-extrabold uppercase tracking-widest text-zinc-500">Whistle Tone</span>
+          <span id="activeProfileDesc" class="text-[10px] font-semibold text-[#ff9f1c] tracking-wide">
+            Pealess Dual-Chamber (2820/3165 Hz)
+          </span>
+        </div>
+        <div id="whistleProfileBar" class="grid grid-cols-4 gap-1.5">
+          <button type="button" data-profile="fox40"
+            class="profile-btn tactile-btn py-2 px-1 rounded-xl bg-amber-500/15 border border-amber-500/60 text-center flex flex-col items-center justify-center">
+            <span class="text-[10px] sm:text-[11px] font-extrabold uppercase tracking-tight text-[#ff9f1c] leading-tight">
+              FOX 40<br/>CLASSIC
+            </span>
+          </button>
+          <button type="button" data-profile="peacork"
+            class="profile-btn tactile-btn py-2 px-1 rounded-xl bg-zinc-900/90 border border-zinc-800 hover:border-zinc-700 text-center flex flex-col items-center justify-center">
+            <span class="text-[10px] sm:text-[11px] font-extrabold uppercase tracking-tight text-zinc-400 leading-tight">
+              PEA<br/>CORK
+            </span>
+          </button>
+          <button type="button" data-profile="sonik"
+            class="profile-btn tactile-btn py-2 px-1 rounded-xl bg-zinc-900/90 border border-zinc-800 hover:border-zinc-700 text-center flex flex-col items-center justify-center">
+            <span class="text-[10px] sm:text-[11px] font-extrabold uppercase tracking-tight text-zinc-400 leading-tight">
+              SONIK<br/>BLAST
+            </span>
+          </button>
+          <button type="button" data-profile="chirp"
+            class="profile-btn tactile-btn py-2 px-1 rounded-xl bg-zinc-900/90 border border-zinc-800 hover:border-zinc-700 text-center flex flex-col items-center justify-center">
+            <span class="text-[10px] sm:text-[11px] font-extrabold uppercase tracking-tight text-zinc-400 leading-tight">
+              SHARP<br/>CHIRP
+            </span>
+          </button>
+        </div>
+      </section>
+
+      <!-- CENTER-TOP SHOT CLOCK MODULE -->
+      <section class="bg-[#0b0b0e] border border-zinc-800/90 rounded-2xl p-3 sm:p-4 flex flex-col gap-2.5 shrink-0 shadow-xl">
+        <!-- Oversized LED Shot Clock Display (Tap to Start/Pause) -->
+        <button id="shotClockDisplayBtn" type="button"
+          class="tactile-btn w-full py-3.5 sm:py-4 rounded-xl bg-black border-2 border-zinc-800 hover:border-zinc-700 flex flex-col items-center justify-center relative overflow-hidden"
+          title="Tap to Start or Pause Shot Clock">
+          <div class="flex items-center gap-1.5">
+            <span id="clockStatusDot" class="w-2 h-2 rounded-full bg-amber-400"></span>
+            <span id="clockStatusText" class="text-[10px] font-extrabold tracking-widest uppercase text-zinc-400">
+              STOPPED • TAP DIGITS TO RUN
+            </span>
+          </div>
+          <div id="shotClockDigits" class="font-led text-7xl sm:text-8xl font-bold tracking-tight glow-amber mt-1 leading-none">
+            24
+          </div>
+        </button>
+
+        <!-- Quick Reset Presets (30s, 24s, 14s, 10s) + Auto-Run Toggle -->
+        <div class="grid grid-cols-5 gap-1.5 sm:gap-2">
+          <button type="button" data-reset="30"
+            class="shot-reset-btn tactile-btn py-2.5 sm:py-3 rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 font-led text-base sm:text-lg font-bold text-zinc-100">
+            30s
+          </button>
+          <button type="button" data-reset="24"
+            class="shot-reset-btn tactile-btn py-2.5 sm:py-3 rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-amber-500/50 font-led text-base sm:text-lg font-bold text-[#ff9f1c]">
+            24s
+          </button>
+          <button type="button" data-reset="14"
+            class="shot-reset-btn tactile-btn py-2.5 sm:py-3 rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 font-led text-base sm:text-lg font-bold text-zinc-100">
+            14s
+          </button>
+          <button type="button" data-reset="10"
+            class="shot-reset-btn tactile-btn py-2.5 sm:py-3 rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 font-led text-base sm:text-lg font-bold text-zinc-100">
+            10s
+          </button>
+          <button id="autoRunToggleBtn" type="button"
+            class="tactile-btn py-2.5 sm:py-3 px-1 rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 flex flex-col items-center justify-center"
+            title="Toggle whether reset starts clock immediately">
+            <span class="text-[8px] font-bold uppercase tracking-wider text-zinc-500 leading-none mb-0.5">On Reset</span>
+            <span id="autoRunLabel" class="text-[10px] sm:text-[11px] font-extrabold uppercase text-emerald-400 leading-none">
+              Auto-Run
+            </span>
+          </button>
+        </div>
+      </section>
+
+      <!-- BOTTOM HERO ACTION ZONE: FULL-HEIGHT WHISTLE PAD -->
+      <section class="flex-1 min-h-0 flex flex-col">
+        <div class="relative flex-1 min-h-[200px] flex items-center justify-center">
+          <!-- Acoustic Pulse Ring -->
+          <div id="whistlePulseRing"
+            class="pointer-events-none absolute inset-0 rounded-3xl border-2 border-[#ff2a3c] opacity-0"></div>
+
+          <button id="whistleBtn" type="button" aria-label="Whistle Pad: Tap or Hold to Blow, Double-Tap for 2x Tweet"
+            class="whistle-btn relative z-10 w-full h-full rounded-3xl border-2 border-rose-300/35 flex flex-col items-center justify-between cursor-pointer p-4 sm:p-5 overflow-hidden">
+
+            <!-- Top Double-Tap Status Badge -->
+            <div class="w-full flex items-center justify-center min-h-[26px]">
+              <span id="doubleTweetBadge"
+                class="px-3 py-1 rounded-full bg-amber-400 text-black text-xs font-black tracking-widest uppercase shadow-lg opacity-0">
+                2x TWEET &bull; TIE-UP
+              </span>
+            </div>
+
+            <!-- Center Hero Whistle Callout -->
+            <div class="flex flex-col items-center justify-center my-auto">
+              <div class="flex items-center gap-3">
+                <svg class="w-11 h-11 sm:w-14 sm:h-14 text-white drop-shadow" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M11 3a1 1 0 0 1 1 1v2.07A7.002 7.002 0 0 1 17.93 12H21a1 1 0 0 1 .894 1.447l-1.5 3A1 1 0 0 1 19.5 17h-2.126A7.002 7.002 0 0 1 4 13a7 7 0 0 1 6-6.93V4a1 1 0 0 1 1-1zm0 5a5 5 0 1 0 4.9 6H12a1 1 0 0 1-.894-.553L10.382 12H9a1 1 0 1 1 0-2h2a1 1 0 0 1 .894.553l.724 1.447h3.282A5.002 5.002 0 0 0 11 8z"/>
+                </svg>
+                <span class="text-3xl sm:text-5xl font-black tracking-wider text-white uppercase drop-shadow text-center leading-none">
+                  WHISTLE PAD
+                </span>
+              </div>
+              <span class="text-xs sm:text-sm font-extrabold tracking-widest uppercase text-rose-100/95 mt-2">
+                Auto-Pauses Shot Clock
+              </span>
+            </div>
+
+            <!-- Bottom Gesture Legend Pill -->
+            <div class="w-full py-2 px-3 rounded-2xl bg-black/35 border border-white/15">
+              <p class="text-[10px] sm:text-xs font-extrabold tracking-wider uppercase text-white/95 text-center leading-snug">
+                TAP / HOLD: BLOW &nbsp;&bull;&nbsp; DOUBLE-TAP: 2x TWEET
+              </p>
+            </div>
+          </button>
+        </div>
+      </section>
+    </div>
+
+    <!-- ======================================================================= -->
+    <!-- PAGE 2: COURTSIDE SCOREBOARD, POSSESSION & FOULS                        -->
+    <!-- ======================================================================= -->
+    <div class="pager-slide flex flex-col justify-between gap-2.5 pl-0.5">
+      <!-- TOP BAR: POSSESSION ARROW & RESET ALL SCORES -->
+      <section class="bg-[#0b0b0e] border border-zinc-800/90 rounded-2xl p-2.5 flex items-center justify-between gap-2 shrink-0">
+        <button id="possToggleBtn" type="button"
+          class="tactile-btn flex-1 py-2 px-3 rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 flex items-center justify-center gap-3"
+          title="Tap to Flip Alternating Possession Arrow">
+          <span id="possLeftArrow" class="font-led text-xl font-black text-[#ff9f1c] drop-shadow-[0_0_8px_rgba(255,159,28,0.6)]">
+            &#9664;
+          </span>
+          <span class="text-[11px] font-extrabold uppercase tracking-widest text-zinc-300">
+            POSSESSION
+          </span>
+          <span id="possRightArrow" class="font-led text-xl font-black text-zinc-700">
+            &#9654;
+          </span>
+        </button>
+
+        <button id="resetScoresBtn" type="button"
+          class="tactile-btn py-2 px-3 rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 text-[11px] font-extrabold uppercase tracking-wider text-zinc-400 hover:text-rose-400"
+          title="Reset Scores & Fouls">
+          Reset Game
+        </button>
+      </section>
+
+      <!-- TWO-TEAM SIDE-BY-SIDE SCORE CARDS -->
+      <section class="flex-1 min-h-0 grid grid-cols-2 gap-2.5">
+        <!-- HOME TEAM CARD -->
+        <div class="bg-[#0b0b0e] border border-zinc-800/90 rounded-2xl p-3 flex flex-col justify-between">
+      <!-- TWO-TEAM VERTICALLY STACKED SCORE CARDS -->
+      <section class="flex-1 min-h-0 grid grid-rows-2 gap-2.5">
+        <!-- HOME TEAM CARD -->
+        <div class="bg-[#0b0b0e] border border-zinc-800/90 rounded-2xl p-3 flex flex-col justify-between">
+          <!-- Top Row: Team Name & 5-Dot Foul Tracker -->
+          <div class="flex items-center justify-between gap-3">
+            <input id="homeNameInput" type="text" value="HOME" maxlength="12" aria-label="Home Team Name"
+              class="w-32 sm:w-40 bg-transparent text-left text-base sm:text-lg font-black uppercase tracking-wider text-zinc-100 border-b border-zinc-800 focus:border-[#ff9f1c] focus:outline-none pb-0.5" />
+
+            <!-- 5-Dot Team Foul Tracker -->
+            <button type="button" data-team="home"
+              class="foul-tracker-btn tactile-btn py-1.5 px-2.5 rounded-xl bg-zinc-900/80 border border-zinc-800 flex items-center gap-2"
+              title="Tap to add team foul (cycles 0-5)">
+              <span class="text-[9px] font-extrabold uppercase tracking-widest text-zinc-500">
+                FOULS (<span id="homeFoulCount">0</span>)
+              </span>
+              <div id="homeFoulDots" class="flex items-center gap-1">
+                <span class="w-2.5 h-2.5 rounded-full bg-zinc-800 border border-zinc-700"></span>
+                <span class="w-2.5 h-2.5 rounded-full bg-zinc-800 border border-zinc-700"></span>
+                <span class="w-2.5 h-2.5 rounded-full bg-zinc-800 border border-zinc-700"></span>
+                <span class="w-2.5 h-2.5 rounded-full bg-zinc-800 border border-zinc-700"></span>
+                <span class="w-2.5 h-2.5 rounded-full bg-zinc-800 border border-zinc-700"></span>
+              </div>
+            </button>
+          </div>
+
+          <!-- Center Massive LED Score Digits -->
+          <div class="my-auto flex items-center justify-center">
+            <span id="homeScoreDigits" class="font-led text-7xl sm:text-8xl font-bold glow-amber leading-none">
+              0
+            </span>
+          </div>
+
+          <!-- Bottom Full-Width Scoring Controls (-1, +1, +2, +3) -->
+          <div class="grid grid-cols-4 gap-1.5">
+            <button type="button" data-team="home" data-delta="-1"
+              class="score-btn tactile-btn py-3 rounded-xl bg-zinc-950 hover:bg-zinc-900 border border-zinc-800/80 font-led text-base sm:text-lg font-bold text-zinc-500 hover:text-zinc-300">
+              -1
+            </button>
+            <button type="button" data-team="home" data-delta="1"
+              class="score-btn tactile-btn py-3 rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-zinc-700 font-led text-lg sm:text-xl font-bold text-white">
+              +1
+            </button>
+            <button type="button" data-team="home" data-delta="2"
+              class="score-btn tactile-btn py-3 rounded-xl bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/60 font-led text-lg sm:text-xl font-bold text-[#ff9f1c]">
+              +2
+            </button>
+            <button type="button" data-team="home" data-delta="3"
+              class="score-btn tactile-btn py-3 rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-zinc-700 font-led text-lg sm:text-xl font-bold text-white">
+              +3
+            </button>
+          </div>
+        </div>
+
+        <!-- AWAY TEAM CARD -->
+        <div class="bg-[#0b0b0e] border border-zinc-800/90 rounded-2xl p-3 flex flex-col justify-between">
+          <!-- Top Row: Team Name & 5-Dot Foul Tracker -->
+          <div class="flex items-center justify-between gap-3">
+            <input id="awayNameInput" type="text" value="GUEST" maxlength="12" aria-label="Guest Team Name"
+              class="w-32 sm:w-40 bg-transparent text-left text-base sm:text-lg font-black uppercase tracking-wider text-zinc-100 border-b border-zinc-800 focus:border-[#ff9f1c] focus:outline-none pb-0.5" />
+
+            <!-- 5-Dot Team Foul Tracker -->
+            <button type="button" data-team="away"
+              class="foul-tracker-btn tactile-btn py-1.5 px-2.5 rounded-xl bg-zinc-900/80 border border-zinc-800 flex items-center gap-2"
+              title="Tap to add team foul (cycles 0-5)">
+              <span class="text-[9px] font-extrabold uppercase tracking-widest text-zinc-500">
+                FOULS (<span id="awayFoulCount">0</span>)
+              </span>
+              <div id="awayFoulDots" class="flex items-center gap-1">
+                <span class="w-2.5 h-2.5 rounded-full bg-zinc-800 border border-zinc-700"></span>
+                <span class="w-2.5 h-2.5 rounded-full bg-zinc-800 border border-zinc-700"></span>
+                <span class="w-2.5 h-2.5 rounded-full bg-zinc-800 border border-zinc-700"></span>
+                <span class="w-2.5 h-2.5 rounded-full bg-zinc-800 border border-zinc-700"></span>
+                <span class="w-2.5 h-2.5 rounded-full bg-zinc-800 border border-zinc-700"></span>
+              </div>
+            </button>
+          </div>
+
+          <!-- Center Massive LED Score Digits -->
+          <div class="my-auto flex items-center justify-center">
+            <span id="awayScoreDigits" class="font-led text-7xl sm:text-8xl font-bold text-white leading-none">
+              0
+            </span>
+          </div>
+
+          <!-- Bottom Full-Width Scoring Controls (-1, +1, +2, +3) -->
+          <div class="grid grid-cols-4 gap-1.5">
+            <button type="button" data-team="away" data-delta="-1"
+              class="score-btn tactile-btn py-3 rounded-xl bg-zinc-950 hover:bg-zinc-900 border border-zinc-800/80 font-led text-base sm:text-lg font-bold text-zinc-500 hover:text-zinc-300">
+              -1
+            </button>
+            <button type="button" data-team="away" data-delta="1"
+              class="score-btn tactile-btn py-3 rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-zinc-700 font-led text-lg sm:text-xl font-bold text-white">
+              +1
+            </button>
+            <button type="button" data-team="away" data-delta="2"
+              class="score-btn tactile-btn py-3 rounded-xl bg-zinc-800 hover:bg-zinc-700 border border-zinc-500 font-led text-lg sm:text-xl font-bold text-white">
+              +2
+            </button>
+            <button type="button" data-team="away" data-delta="3"
+              class="score-btn tactile-btn py-3 rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-zinc-700 font-led text-lg sm:text-xl font-bold text-white">
+              +3
+            </button>
+          </div>
+        </div>
+      </section>
+
+      <!-- MINI QUICK-WHISTLE BAR ON SCORE PAGE -->
+      <section class="shrink-0">
+        <button id="miniWhistleBtn" type="button"
+          class="tactile-btn w-full py-3 rounded-2xl bg-rose-600/20 hover:bg-rose-600/30 border border-rose-500/50 flex items-center justify-center gap-2 text-rose-300 font-extrabold text-xs uppercase tracking-widest">
+          <span>Quick Whistle Blast</span>
+        </button>
+      </section>
+    </div>
+
+  </main>
+
+  <!-- iOS-STYLE PAGE CONTROL DOTS & LABELS -->
+  <nav aria-label="Page Navigation" class="pt-2 pb-0.5 flex items-center justify-center gap-3 shrink-0">
+    <button id="pageDot0" type="button" data-page="0"
+      class="page-nav-btn flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-zinc-900 border border-amber-500/50 text-[10px] font-extrabold uppercase tracking-wider text-[#ff9f1c]">
+      <span class="w-1.5 h-1.5 rounded-full bg-[#ff9f1c]"></span>
+      <span>Ref &amp; Clock</span>
+    </button>
+
+    <button id="pageDot1" type="button" data-page="1"
+      class="page-nav-btn flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-zinc-900/60 border border-zinc-800 text-[10px] font-extrabold uppercase tracking-wider text-zinc-500">
+      <span class="w-1.5 h-1.5 rounded-full bg-zinc-600"></span>
+      <span>Scoreboard</span>
+    </button>
+  </nav>
+
+  <!-- TOAST NOTIFICATION FOR STATUS MESSAGES -->
+  <div id="toastMsg"
+    class="pointer-events-none fixed bottom-16 left-1/2 -translate-x-1/2 z-40 px-3.5 py-1.5 rounded-full bg-zinc-900/95 border border-zinc-700 text-xs font-bold text-zinc-100 opacity-0 transition-opacity duration-200 shadow-lg">
+  </div>
+
+  <script>
+    /**
+     * CourtSide Ref — Sleek Basketball Whistle & Shot Clock
+     * Zero external audio assets: uses Web Audio API to synthesize 4 distinct
+     * referee whistle profiles, 5-second warning chirp, and shot clock horn.
+     */
+
+    // =========================================================================
+    // 1. WHISTLE ACOUSTIC PROFILES & WEB AUDIO SYNTHESIZER
+    // =========================================================================
+    const WHISTLE_PROFILES = {
+      fox40: {
+        name: 'FOX 40 CLASSIC',
+        desc: 'Pealess Dual-Chamber (2820/3165 Hz)',
+        freq1: 2820,
+        type1: 'sine',
+        freq2: 3165,
+        type2: 'triangle',
+        trillRate: 38,
+        trillDepth: 42,
+        filterFreq: 3000,
+        filterQ: 3.2,
+        noiseMix: 0.03,
+        gainLevel: 0.42
+      },
+      peacork: {
+        name: 'PEA CORK',
+        desc: 'Traditional Brass & Rolling Cork (2350 Hz)',
+        freq1: 2350,
+        type1: 'triangle',
+        freq2: 2395,
+        type2: 'sine',
+        trillRate: 24,
+        trillDepth: 88, // Heavy rolling cork pitch modulation
+        filterFreq: 2450,
+        filterQ: 2.4,
+        noiseMix: 0.14, // Audible breath/air turbulence
+        gainLevel: 0.45
+      },
+      sonik: {
+        name: 'SONIK BLAST',
+        desc: 'Ultra-Piercing Arena Harmonic (3100/3480 Hz)',
+        freq1: 3100,
+        type1: 'square',
+        freq2: 3480,
+        type2: 'triangle',
+        trillRate: 44,
+        trillDepth: 48,
+        filterFreq: 3300,
+        filterQ: 3.6,
+        noiseMix: 0.02,
+        gainLevel: 0.34 // Controlled gain to balance bright square harmonics
+      },
+      chirp: {
+        name: 'SHARP CHIRP',
+        desc: 'Punchy Single-Chamber Gym Tone (2750 Hz)',
+        freq1: 2750,
+        type1: 'sine',
+        freq2: 2756,
+        type2: 'triangle',
+        trillRate: 14,
+        trillDepth: 10, // Minimal trill for clean, tight gym tone
+        filterFreq: 2800,
+        filterQ: 2.8,
+        noiseMix: 0.04,
+        gainLevel: 0.44
+      }
+    };
+
+    class CourtAudioEngine {
+      constructor() {
+        this.ctx = null;
+        this.isMuted = false;
+        this.activeWhistle = null;
+        this.currentProfileKey = 'fox40';
+        this.noiseBuffer = null;
+      }
+
+      // Initialize or resume AudioContext on first user gesture
+      ensureContext() {
+        if (!this.ctx) {
+          const AudioCtx = window.AudioContext || window.webkitAudioContext;
+          this.ctx = new AudioCtx();
+          this.noiseBuffer = this.createWhiteNoiseBuffer();
+        }
+        if (this.ctx.state === 'suspended') {
+          this.ctx.resume();
+        }
+      }
+
+      // Pre-generate 1 second of white noise for realistic air-stream turbulence
+      createWhiteNoiseBuffer() {
+        const bufferSize = this.ctx.sampleRate;
+        const buffer = this.ctx.createBuffer(1, bufferSize, this.ctx.sampleRate);
+        const data = buffer.getChannelData(0);
+        for (let i = 0; i < bufferSize; i++) {
+          data[i] = Math.random() * 2 - 1;
+        }
+        return buffer;
+      }
+
+      setProfile(key) {
+        if (WHISTLE_PROFILES[key]) {
+          this.currentProfileKey = key;
+        }
+      }
+
+      /**
+       * Starts a continuous synthesized whistle using the active profile parameters.
+       */
+      startWhistle() {
+        if (this.isMuted) return;
+        this.ensureContext();
+
+        if (this.activeWhistle) {
+          this.stopWhistle(true);
+        }
+
+        const profile = WHISTLE_PROFILES[this.currentProfileKey];
+        const now = this.ctx.currentTime;
+
+        // Primary dual oscillators
+        const osc1 = this.ctx.createOscillator();
+        const osc2 = this.ctx.createOscillator();
+        osc1.type = profile.type1;
+        osc2.type = profile.type2;
+        osc1.frequency.setValueAtTime(profile.freq1, now);
+        osc2.frequency.setValueAtTime(profile.freq2, now);
+
+        // Trill LFO (modulates frequency + amplitude for pea/chamber flutter)
+        const trillLfo = this.ctx.createOscillator();
+        const trillPitchGain = this.ctx.createGain();
+        trillLfo.type = 'sine';
+        trillLfo.frequency.setValueAtTime(profile.trillRate, now);
+        trillPitchGain.gain.setValueAtTime(profile.trillDepth, now);
+
+        trillLfo.connect(trillPitchGain);
+        trillPitchGain.connect(osc1.frequency);
+        trillPitchGain.connect(osc2.frequency);
+
+        // Breath/Air turbulence noise generator (especially prominent on Pea Cork)
+        const noiseSource = this.ctx.createBufferSource();
+        noiseSource.buffer = this.noiseBuffer;
+        noiseSource.loop = true;
+
+        const noiseFilter = this.ctx.createBiquadFilter();
+        noiseFilter.type = 'bandpass';
+        noiseFilter.frequency.setValueAtTime(profile.filterFreq * 0.9, now);
+        noiseFilter.Q.setValueAtTime(1.5, now);
+
+        const noiseGain = this.ctx.createGain();
+        noiseGain.gain.setValueAtTime(profile.noiseMix, now);
+
+        noiseSource.connect(noiseFilter);
+        noiseFilter.connect(noiseGain);
+
+        // Bandpass filter to focus acoustic energy into piercing referee range
+        const bandpass = this.ctx.createBiquadFilter();
+        bandpass.type = 'bandpass';
+        bandpass.frequency.setValueAtTime(profile.filterFreq, now);
+        bandpass.Q.setValueAtTime(profile.filterQ, now);
+
+        // Master whistle envelope gain (sharp attack)
+        const masterGain = this.ctx.createGain();
+        masterGain.gain.setValueAtTime(0.0001, now);
+        masterGain.gain.exponentialRampToValueAtTime(profile.gainLevel, now + 0.018);
+
+        // Connect graph
+        osc1.connect(bandpass);
+        osc2.connect(bandpass);
+        noiseGain.connect(bandpass);
+        bandpass.connect(masterGain);
+        masterGain.connect(this.ctx.destination);
+
+        osc1.start(now);
+        osc2.start(now);
+        trillLfo.start(now);
+        noiseSource.start(now);
+
+        this.activeWhistle = {
+          osc1,
+          osc2,
+          trillLfo,
+          noiseSource,
+          masterGain
+        };
+      }
+
+      /**
+       * Stops the active whistle with a crisp acoustic decay.
+       */
+      stopWhistle(immediate = false) {
+        if (!this.activeWhistle || !this.ctx) return;
+
+        const { osc1, osc2, trillLfo, noiseSource, masterGain } = this.activeWhistle;
+        this.activeWhistle = null;
+
+        const now = this.ctx.currentTime;
+        const releaseTime = immediate ? 0.015 : 0.04;
+
+        try {
+          masterGain.gain.cancelScheduledValues(now);
+          masterGain.gain.setValueAtTime(Math.max(masterGain.gain.value, 0.001), now);
+          masterGain.gain.exponentialRampToValueAtTime(0.0001, now + releaseTime);
+
+          osc1.stop(now + releaseTime + 0.01);
+          osc2.stop(now + releaseTime + 0.01);
+          trillLfo.stop(now + releaseTime + 0.01);
+          noiseSource.stop(now + releaseTime + 0.01);
+        } catch (e) {
+          // Ignore already stopped nodes
+        }
+      }
+
+      /**
+       * Plays a brief ~165ms preview chirp when switching whistle sound profiles.
+       */
+      playPreviewChirp() {
+        if (this.isMuted) return;
+        this.ensureContext();
+        this.startWhistle();
+        setTimeout(() => {
+          this.stopWhistle();
+        }, 165);
+      }
+
+      /**
+       * Plays an automated double-blast ("Two Tweets") for tie-ups or attention.
+       * Tracks scheduled timers so overlapping calls never produce extra chirps.
+       */
+      playDoubleTweet() {
+        if (this.isMuted) return;
+        this.ensureContext();
+        this.clearScheduledCadence();
+        this.stopWhistle(true);
+
+        this.cadenceTimers = [];
+
+        // Chirp 1 (0ms -> 135ms)
+        this.startWhistle();
+        this.cadenceTimers.push(setTimeout(() => {
+          this.stopWhistle(true);
+
+          // Pause (95ms), then Chirp 2 (230ms -> 375ms)
+          this.cadenceTimers.push(setTimeout(() => {
+            this.startWhistle();
+            this.cadenceTimers.push(setTimeout(() => {
+              this.stopWhistle(true);
+            }, 145));
+          }, 95));
+        }, 135));
+      }
+
+      clearScheduledCadence() {
+        if (this.cadenceTimers && this.cadenceTimers.length) {
+          this.cadenceTimers.forEach((id) => clearTimeout(id));
+          this.cadenceTimers = [];
+        }
+      }
+
+      /**
+       * Subtle high-pitched warning chirp at 5.0 seconds remaining on shot clock.
+       */
+      playWarningChirp() {
+        if (this.isMuted) return;
+        this.ensureContext();
+
+        const now = this.ctx.currentTime;
+        const osc = this.ctx.createOscillator();
+        const gain = this.ctx.createGain();
+
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(1760, now);
+        gain.gain.setValueAtTime(0.001, now);
+        gain.gain.exponentialRampToValueAtTime(0.14, now + 0.01);
+        gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.09);
+
+        osc.connect(gain);
+        gain.connect(this.ctx.destination);
+
+        osc.start(now);
+        osc.stop(now + 0.1);
+      }
+
+      /**
+       * Plays a single crisp second-tweet blast to complete a double-tap cadence.
+       */
+      playSecondTweetBlast() {
+        if (this.isMuted) return;
+        this.ensureContext();
+        this.clearScheduledCadence();
+        this.stopWhistle(true);
+
+        this.cadenceTimers = [];
+
+        // Brief 75ms silence gap after Tap 1, then Chirp 2 (150ms)
+        this.cadenceTimers.push(setTimeout(() => {
+          this.startWhistle();
+          this.cadenceTimers.push(setTimeout(() => {
+            this.stopWhistle(true);
+          }, 150));
+        }, 75));
+      }
+
+      /**
+       * Loud multi-oscillator arena horn buzzer when shot clock hits 0.0.
+       */
+      playShotClockBuzzer() {
+        if (this.isMuted) return;
+        this.ensureContext();
+
+        const now = this.ctx.currentTime;
+        const duration = 0.85;
+
+        const freqs = [146.83, 185.0, 220.0]; // D3, F#3, A3 dissonant horn chord
+        const masterGain = this.ctx.createGain();
+        masterGain.gain.setValueAtTime(0.001, now);
+        masterGain.gain.exponentialRampToValueAtTime(0.32, now + 0.03);
+        masterGain.gain.setValueAtTime(0.32, now + duration - 0.08);
+        masterGain.gain.exponentialRampToValueAtTime(0.0001, now + duration);
+
+        const filter = this.ctx.createBiquadFilter();
+        filter.type = 'lowpass';
+        filter.frequency.setValueAtTime(1100, now);
+
+        filter.connect(masterGain);
+        masterGain.connect(this.ctx.destination);
+
+        freqs.forEach((f) => {
+          const osc = this.ctx.createOscillator();
+          osc.type = 'sawtooth';
+          osc.frequency.setValueAtTime(f, now);
+          osc.connect(filter);
+          osc.start(now);
+          osc.stop(now + duration);
+        });
+      }
+    }
+
+    // =========================================================================
+    // 2. APPLICATION STATE & DOM REFERENCES
+    // =========================================================================
+    const audio = new CourtAudioEngine();
+
+    const state = {
+      shotDuration: 24,
+      remainingMs: 24000,
+      isRunning: false,
+      autoRunOnReset: true,
+      lastFrameTime: null,
+      fiveSecWarned: false,
+      isWhistleHeld: false,
+      whistleStartedAt: 0,
+      whistleReleaseTimer: null,
+      lastQuickTapAt: 0,
+      wakeLock: null,
+      toastTimer: null,
+      homeScore: 0,
+      awayScore: 0,
+      homeFouls: 0,
+      awayFouls: 0,
+      possession: 'home', // 'home' | 'away'
+      resetConfirmPending: false
+    };
+
+    // DOM Elements
+    const pagerTrack = document.getElementById('pagerTrack');
+    const pageDot0 = document.getElementById('pageDot0');
+    const pageDot1 = document.getElementById('pageDot1');
+
+    const shotClockDisplayBtn = document.getElementById('shotClockDisplayBtn');
+    const shotClockDigits = document.getElementById('shotClockDigits');
+    const clockStatusDot = document.getElementById('clockStatusDot');
+    const clockStatusText = document.getElementById('clockStatusText');
+    const autoRunToggleBtn = document.getElementById('autoRunToggleBtn');
+    const autoRunLabel = document.getElementById('autoRunLabel');
+    const resetButtons = document.querySelectorAll('.shot-reset-btn');
+
+    const whistleBtn = document.getElementById('whistleBtn');
+    const whistlePulseRing = document.getElementById('whistlePulseRing');
+    const doubleTweetBadge = document.getElementById('doubleTweetBadge');
+
+    const profileButtons = document.querySelectorAll('.profile-btn');
+    const activeProfileDesc = document.getElementById('activeProfileDesc');
+
+    const audioToggleBtn = document.getElementById('audioToggleBtn');
+    const audioIcon = document.getElementById('audioIcon');
+    const audioLabel = document.getElementById('audioLabel');
+
+    const wakeLockBtn = document.getElementById('wakeLockBtn');
+    const wakeDot = document.getElementById('wakeDot');
+    const toastMsg = document.getElementById('toastMsg');
+
+    // Scoreboard DOM Elements
+    const homeScoreDigits = document.getElementById('homeScoreDigits');
+    const awayScoreDigits = document.getElementById('awayScoreDigits');
+    const homeFoulCount = document.getElementById('homeFoulCount');
+    const awayFoulCount = document.getElementById('awayFoulCount');
+    const homeFoulDots = document.getElementById('homeFoulDots');
+    const awayFoulDots = document.getElementById('awayFoulDots');
+    const possToggleBtn = document.getElementById('possToggleBtn');
+    const possLeftArrow = document.getElementById('possLeftArrow');
+    const possRightArrow = document.getElementById('possRightArrow');
+    const resetScoresBtn = document.getElementById('resetScoresBtn');
+    const miniWhistleBtn = document.getElementById('miniWhistleBtn');
+    const scoreButtons = document.querySelectorAll('.score-btn');
+    const foulTrackerButtons = document.querySelectorAll('.foul-tracker-btn');
+
+    // =========================================================================
+    // 3. HELPER UTILITIES (HAPTICS, TOAST, WAKE LOCK)
+    // =========================================================================
+    function triggerHaptic(pattern) {
+      if (navigator.vibrate) {
+        try {
+          navigator.vibrate(pattern);
+        } catch (e) {
+          // Ignore unsupported haptic calls
+        }
+      }
+    }
+
+    function showToast(message) {
+      if (!toastMsg) return;
+      toastMsg.textContent = message;
+      toastMsg.classList.remove('opacity-0');
+      toastMsg.classList.add('opacity-100');
+
+      if (state.toastTimer) {
+        clearTimeout(state.toastTimer);
+      }
+      state.toastTimer = setTimeout(() => {
+        toastMsg.classList.remove('opacity-100');
+        toastMsg.classList.add('opacity-0');
+      }, 1700);
+    }
+
+    async function toggleWakeLock() {
+      if (!('wakeLock' in navigator)) {
+        showToast('Wake Lock not supported on this browser');
+        return;
+      }
+
+      if (state.wakeLock) {
+        try {
+          await state.wakeLock.release();
+        } catch (e) {}
+        state.wakeLock = null;
+        wakeDot.className = 'w-2 h-2 rounded-full bg-zinc-600';
+        wakeLockBtn.classList.remove('border-emerald-500/60', 'text-emerald-300');
+        showToast('Screen Wake Lock Off');
+      } else {
+        try {
+          state.wakeLock = await navigator.wakeLock.request('screen');
+          wakeDot.className = 'w-2 h-2 rounded-full bg-emerald-400 shadow-[0_0_8px_#10b981]';
+          wakeLockBtn.classList.add('border-emerald-500/60', 'text-emerald-300');
+          showToast('Screen Kept Awake');
+
+          state.wakeLock.addEventListener('release', () => {
+            state.wakeLock = null;
+            wakeDot.className = 'w-2 h-2 rounded-full bg-zinc-600';
+            wakeLockBtn.classList.remove('border-emerald-500/60', 'text-emerald-300');
+          });
+        } catch (err) {
+          showToast('Could not enable Wake Lock');
+        }
+      }
+    }
+
+    // =========================================================================
+    // 4. WHISTLE TONE SELECTION & GESTURE CONTROLS
+    // =========================================================================
+    function selectWhistleProfile(key, playPreview = true) {
+      if (!WHISTLE_PROFILES[key]) return;
+      audio.setProfile(key);
+      activeProfileDesc.textContent = WHISTLE_PROFILES[key].desc;
+
+      profileButtons.forEach((btn) => {
+        const isSelected = btn.dataset.profile === key;
+        const labelSpan = btn.querySelector('span');
+        if (isSelected) {
+          btn.classList.remove('bg-zinc-900/90', 'border-zinc-800');
+          btn.classList.add('bg-amber-500/15', 'border-amber-500/60');
+          labelSpan.classList.remove('text-zinc-400');
+          labelSpan.classList.add('text-[#ff9f1c]');
+        } else {
+          btn.classList.remove('bg-amber-500/15', 'border-amber-500/60');
+          btn.classList.add('bg-zinc-900/90', 'border-zinc-800');
+          labelSpan.classList.remove('text-[#ff9f1c]');
+          labelSpan.classList.add('text-zinc-400');
+        }
+      });
+
+      if (playPreview) {
+        audio.playPreviewChirp();
+        triggerHaptic(20);
+      }
+    }
+
+    const MIN_BLAST_MS = 190;          // Crisp blast minimum duration on single tap
+    const DOUBLE_TAP_WINDOW_MS = 350;  // Rapid second tap window for 2x Tweet
+    let doubleTweetResetTimer = null;
+
+    function triggerDoubleTweetCadence(fromSecondTap = false) {
+      // Cancel any pending release timer from the first tap so it doesn't overlap
+      if (state.whistleReleaseTimer) {
+        clearTimeout(state.whistleReleaseTimer);
+        state.whistleReleaseTimer = null;
+      }
+      if (doubleTweetResetTimer) {
+        clearTimeout(doubleTweetResetTimer);
+        doubleTweetResetTimer = null;
+      }
+
+      state.isWhistleHeld = false;
+      state.lastQuickTapAt = 0;
+
+      if (state.isRunning) {
+        pauseShotClock(true);
+      }
+
+      // If triggered by a physical 2nd tap, Tap 1 was already Chirp 1—only fire Chirp 2!
+      if (fromSecondTap) {
+        audio.playSecondTweetBlast();
+      } else {
+        audio.playDoubleTweet();
+      }
+      triggerHaptic([35, 65, 35]);
+
+      // Visual pulse ring + 2x TWEET badge pop
+      whistleBtn.classList.add('active');
+      whistlePulseRing.classList.remove('opacity-0');
+      whistlePulseRing.classList.add('pulse-ring-active');
+
+      doubleTweetBadge.classList.remove('badge-pop-active', 'opacity-0');
+      void doubleTweetBadge.offsetWidth;
+      doubleTweetBadge.classList.add('badge-pop-active');
+
+      doubleTweetResetTimer = setTimeout(() => {
+        if (!state.isWhistleHeld) {
+          whistleBtn.classList.remove('active');
+          whistlePulseRing.classList.remove('pulse-ring-active');
+          whistlePulseRing.classList.add('opacity-0');
+        }
+      }, 320);
+    }
+
+    function engageWhistle() {
+      if (state.whistleReleaseTimer) {
+        clearTimeout(state.whistleReleaseTimer);
+        state.whistleReleaseTimer = null;
+      }
+      audio.clearScheduledCadence();
+
+      if (state.isWhistleHeld) return;
+      state.isWhistleHeld = true;
+      state.whistleStartedAt = performance.now();
+
+      // Immediately stop the shot clock on any whistle blow
+      if (state.isRunning) {
+        pauseShotClock(true);
+      }
+
+      audio.startWhistle();
+      triggerHaptic(45);
+
+      whistleBtn.classList.add('active');
+      whistlePulseRing.classList.remove('opacity-0');
+      whistlePulseRing.classList.add('pulse-ring-active');
+    }
+
+    function releaseWhistle() {
+      if (!state.isWhistleHeld) return;
+      state.isWhistleHeld = false;
+
+      const elapsed = performance.now() - state.whistleStartedAt;
+      const remainingMinBlast = Math.max(0, MIN_BLAST_MS - elapsed);
+
+      // Record timestamp of quick taps so a rapid second tap can trigger 2x Tweet
+      if (elapsed < 280) {
+        state.lastQuickTapAt = performance.now();
+      } else {
+        state.lastQuickTapAt = 0;
+      }
+
+      state.whistleReleaseTimer = setTimeout(() => {
+        audio.stopWhistle();
+        whistleBtn.classList.remove('active');
+        whistlePulseRing.classList.remove('pulse-ring-active');
+        whistlePulseRing.classList.add('opacity-0');
+      }, remainingMinBlast);
+    }
+
+    // =========================================================================
+    // 5. SHOT CLOCK ENGINE (REQUESTANIMATIONFRAME PRECISION)
+    // =========================================================================
+    function formatShotClock(ms) {
+      if (ms <= 0) return '0.0';
+      const totalSeconds = ms / 1000;
+      if (totalSeconds < 5.0) {
+        return totalSeconds.toFixed(1);
+      }
+      return Math.ceil(totalSeconds).toString();
+    }
+
+    function renderShotClock() {
+      shotClockDigits.textContent = formatShotClock(state.remainingMs);
+
+      shotClockDigits.classList.remove('glow-amber', 'glow-red', 'pulse-amber-urgent');
+      if (state.remainingMs <= 0) {
+        shotClockDigits.classList.add('glow-red');
+      } else if (state.remainingMs <= 5000 && state.isRunning) {
+        shotClockDigits.classList.add('pulse-amber-urgent');
+      } else {
+        shotClockDigits.classList.add('glow-amber');
+      }
+
+      if (state.remainingMs <= 0) {
+        clockStatusDot.className = 'w-2 h-2 rounded-full bg-rose-500';
+        clockStatusText.textContent = 'VIOLATION • TAP RESET';
+        clockStatusText.className = 'text-[10px] font-extrabold tracking-widest uppercase text-rose-400';
+      } else if (state.isRunning) {
+        clockStatusDot.className = 'w-2 h-2 rounded-full bg-emerald-400 animate-ping';
+        clockStatusText.textContent = 'RUNNING • TAP DIGITS TO PAUSE';
+        clockStatusText.className = 'text-[10px] font-extrabold tracking-widest uppercase text-emerald-400';
+      } else {
+        clockStatusDot.className = 'w-2 h-2 rounded-full bg-amber-400';
+        clockStatusText.textContent = 'STOPPED • TAP DIGITS TO RUN';
+        clockStatusText.className = 'text-[10px] font-extrabold tracking-widest uppercase text-zinc-400';
+      }
+    }
+
+    function startShotClock() {
+      if (state.remainingMs <= 0) {
+        state.remainingMs = state.shotDuration * 1000;
+        state.fiveSecWarned = false;
+      }
+      if (state.isRunning) return;
+      audio.ensureContext();
+      state.isRunning = true;
+      state.lastFrameTime = performance.now();
+      renderShotClock();
+      requestAnimationFrame(tickShotClock);
+    }
+
+    function pauseShotClock(fromWhistle = false) {
+      state.isRunning = false;
+      state.lastFrameTime = null;
+      renderShotClock();
+      if (fromWhistle) {
+        showToast('Whistle Blown — Clock Stopped');
+      }
+    }
+
+    function toggleShotClock() {
+      triggerHaptic(25);
+      if (state.isRunning) {
+        pauseShotClock(false);
+      } else {
+        startShotClock();
+      }
+    }
+
+    function resetShotClock(seconds) {
+      triggerHaptic(30);
+      state.shotDuration = seconds;
+      state.remainingMs = seconds * 1000;
+      state.fiveSecWarned = false;
+
+      resetButtons.forEach((btn) => {
+        const val = parseInt(btn.dataset.reset, 10);
+        if (val === seconds) {
+          btn.classList.add('border-amber-500/50', 'text-[#ff9f1c]');
+          btn.classList.remove('border-zinc-800', 'text-zinc-100');
+        } else {
+          btn.classList.remove('border-amber-500/50', 'text-[#ff9f1c]');
+          btn.classList.add('border-zinc-800', 'text-zinc-100');
+        }
+      });
+
+      if (state.autoRunOnReset) {
+        state.isRunning = true;
+        state.lastFrameTime = performance.now();
+        renderShotClock();
+        requestAnimationFrame(tickShotClock);
+      } else {
+        state.isRunning = false;
+        state.lastFrameTime = null;
+        renderShotClock();
+      }
+    }
+
+    function tickShotClock(now) {
+      if (!state.isRunning) return;
+
+      if (state.lastFrameTime !== null) {
+        const delta = now - state.lastFrameTime;
+        state.remainingMs = Math.max(0, state.remainingMs - delta);
+
+        // 5-second warning chirp
+        if (state.remainingMs <= 5000 && state.remainingMs > 0 && !state.fiveSecWarned) {
+          state.fiveSecWarned = true;
+          audio.playWarningChirp();
+          triggerHaptic(35);
+        }
+
+        // Shot clock violation buzzer at 0.0
+        if (state.remainingMs <= 0) {
+          state.remainingMs = 0;
+          state.isRunning = false;
+          state.lastFrameTime = null;
+          renderShotClock();
+          audio.playShotClockBuzzer();
+          triggerHaptic([120, 60, 180]);
+          document.body.classList.remove('buzzer-alert');
+          void document.body.offsetWidth;
+          document.body.classList.add('buzzer-alert');
+          showToast('SHOT CLOCK VIOLATION');
+          return;
+        }
+      }
+
+      state.lastFrameTime = now;
+      renderShotClock();
+      requestAnimationFrame(tickShotClock);
+    }
+
+    // =========================================================================
+    // 6. EVENT LISTENERS (POINTER GESTURES, BUTTONS & KEYBOARD SHORTCUTS)
+    // =========================================================================
+    // 6. SCOREBOARD & PAGINATION LOGIC
+    // =========================================================================
+    function renderScoreboard() {
+      homeScoreDigits.textContent = state.homeScore;
+      awayScoreDigits.textContent = state.awayScore;
+      homeFoulCount.textContent = state.homeFouls;
+      awayFoulCount.textContent = state.awayFouls;
+
+      const renderFoulDots = (container, count) => {
+        const dots = container.querySelectorAll('span');
+        dots.forEach((dot, i) => {
+          if (i < count) {
+            dot.className = count >= 5
+              ? 'w-2.5 h-2.5 rounded-full bg-rose-500 shadow-[0_0_6px_#ff2a3c]'
+              : 'w-2.5 h-2.5 rounded-full bg-amber-400';
+          } else {
+            dot.className = 'w-2.5 h-2.5 rounded-full bg-zinc-800 border border-zinc-700';
+          }
+        });
+      };
+
+      renderFoulDots(homeFoulDots, state.homeFouls);
+      renderFoulDots(awayFoulDots, state.awayFouls);
+
+      if (state.possession === 'home') {
+        possLeftArrow.className = 'font-led text-xl font-black text-[#ff9f1c] drop-shadow-[0_0_8px_rgba(255,159,28,0.6)]';
+        possRightArrow.className = 'font-led text-xl font-black text-zinc-700';
+      } else {
+        possLeftArrow.className = 'font-led text-xl font-black text-zinc-700';
+        possRightArrow.className = 'font-led text-xl font-black text-[#ff9f1c] drop-shadow-[0_0_8px_rgba(255,159,28,0.6)]';
+      }
+    }
+
+    function updatePageIndicator(pageIndex) {
+      const buttons = [pageDot0, pageDot1];
+      buttons.forEach((btn, idx) => {
+        const dot = btn.querySelector('span:first-child');
+        if (idx === pageIndex) {
+          btn.className = 'page-nav-btn flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-zinc-900 border border-amber-500/50 text-[10px] font-extrabold uppercase tracking-wider text-[#ff9f1c]';
+          dot.className = 'w-1.5 h-1.5 rounded-full bg-[#ff9f1c]';
+        } else {
+          btn.className = 'page-nav-btn flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-zinc-900/60 border border-zinc-800 text-[10px] font-extrabold uppercase tracking-wider text-zinc-500';
+          dot.className = 'w-1.5 h-1.5 rounded-full bg-zinc-600';
+        }
+      });
+    }
+
+    function goToPage(pageIndex) {
+      const slideWidth = pagerTrack.clientWidth;
+      pagerTrack.scrollTo({
+        left: pageIndex * slideWidth,
+        behavior: 'smooth'
+      });
+      updatePageIndicator(pageIndex);
+    }
+
+    // =========================================================================
+    // 7. EVENT LISTENERS (POINTER GESTURES, BUTTONS & KEYBOARD SHORTCUTS)
+    // =========================================================================
+    whistleBtn.addEventListener('pointerdown', (e) => {
+      if (e.button !== 0 && e.pointerType === 'mouse') return;
+      e.preventDefault();
+      whistleBtn.setPointerCapture(e.pointerId);
+
+      const now = performance.now();
+      // Check if this down event is a rapid second tap within ~350ms
+      if (state.lastQuickTapAt > 0 && (now - state.lastQuickTapAt) <= DOUBLE_TAP_WINDOW_MS) {
+        // Tap 1 was Chirp 1; fire only Chirp 2 so you hear an exact 2-chirp cadence
+        triggerDoubleTweetCadence(true);
+      } else {
+        engageWhistle();
+      }
+    });
+
+    whistleBtn.addEventListener('pointerup', () => {
+      releaseWhistle();
+    });
+
+    whistleBtn.addEventListener('pointercancel', () => {
+      releaseWhistle();
+    });
+
+    // Whistle Profile Selector Pills
+    profileButtons.forEach((btn) => {
+      btn.addEventListener('click', () => {
+        selectWhistleProfile(btn.dataset.profile, true);
+      });
+    });
+
+    // Shot Clock Display Tap
+    shotClockDisplayBtn.addEventListener('click', toggleShotClock);
+
+    // Reset Preset Buttons
+    resetButtons.forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const secs = parseInt(btn.dataset.reset, 10);
+        resetShotClock(secs);
+      });
+    });
+
+    // Auto-Run vs Hold-Ready Toggle
+    autoRunToggleBtn.addEventListener('click', () => {
+      triggerHaptic(20);
+      state.autoRunOnReset = !state.autoRunOnReset;
+      if (state.autoRunOnReset) {
+        autoRunLabel.textContent = 'Auto-Run';
+        autoRunLabel.className = 'text-[10px] sm:text-[11px] font-extrabold uppercase text-emerald-400 leading-none';
+        showToast('Reset starts clock immediately');
+      } else {
+        autoRunLabel.textContent = 'Hold Ready';
+        autoRunLabel.className = 'text-[10px] sm:text-[11px] font-extrabold uppercase text-amber-400 leading-none';
+        showToast('Reset holds clock at ready');
+      }
+    });
+
+    // Scoreboard Buttons (+1, +2, +3, -1)
+    scoreButtons.forEach((btn) => {
+      btn.addEventListener('click', () => {
+        triggerHaptic(20);
+        const team = btn.dataset.team;
+        const delta = parseInt(btn.dataset.delta, 10);
+        if (team === 'home') {
+          state.homeScore = Math.max(0, state.homeScore + delta);
+        } else {
+          state.awayScore = Math.max(0, state.awayScore + delta);
+        }
+        renderScoreboard();
+      });
+    });
+
+    // Team Foul Dot Trackers
+    foulTrackerButtons.forEach((btn) => {
+      btn.addEventListener('click', () => {
+        triggerHaptic(25);
+        const team = btn.dataset.team;
+        if (team === 'home') {
+          state.homeFouls = (state.homeFouls + 1) % 6;
+        } else {
+          state.awayFouls = (state.awayFouls + 1) % 6;
+        }
+        renderScoreboard();
+      });
+    });
+
+    // Alternating Possession Toggle
+    possToggleBtn.addEventListener('click', () => {
+      triggerHaptic(25);
+      state.possession = state.possession === 'home' ? 'away' : 'home';
+      renderScoreboard();
+    });
+
+    // Two-Tap Safe Reset Game Scores & Fouls
+    resetScoresBtn.addEventListener('click', () => {
+      triggerHaptic(30);
+      if (!state.resetConfirmPending) {
+        state.resetConfirmPending = true;
+        resetScoresBtn.textContent = 'Tap to Confirm';
+        resetScoresBtn.classList.add('border-rose-500/60', 'text-rose-400');
+        setTimeout(() => {
+          state.resetConfirmPending = false;
+          resetScoresBtn.textContent = 'Reset Game';
+          resetScoresBtn.classList.remove('border-rose-500/60', 'text-rose-400');
+        }, 2500);
+        return;
+      }
+      state.resetConfirmPending = false;
+      state.homeScore = 0;
+      state.awayScore = 0;
+      state.homeFouls = 0;
+      state.awayFouls = 0;
+      resetScoresBtn.textContent = 'Reset Game';
+      resetScoresBtn.classList.remove('border-rose-500/60', 'text-rose-400');
+      renderScoreboard();
+      showToast('Scores & Fouls Reset');
+    });
+
+    // Mini Whistle Blast on Scoreboard Page
+    miniWhistleBtn.addEventListener('click', () => {
+      triggerHaptic(35);
+      if (state.isRunning) {
+        pauseShotClock(true);
+      }
+      audio.playPreviewChirp();
+    });
+
+    // Horizontal Scroll & Dot Navigation Sync
+    pagerTrack.addEventListener('scroll', () => {
+      const pageIndex = Math.round(pagerTrack.scrollLeft / Math.max(1, pagerTrack.clientWidth));
+      updatePageIndicator(pageIndex);
+    }, { passive: true });
+
+    pageDot0.addEventListener('click', () => goToPage(0));
+    pageDot1.addEventListener('click', () => goToPage(1));
+
+    // Audio Mute Toggle
+    audioToggleBtn.addEventListener('click', () => {
+      audio.ensureContext();
+      audio.isMuted = !audio.isMuted;
+      if (audio.isMuted) {
+        audio.stopWhistle(true);
+        audioIcon.textContent = '🔇';
+        audioLabel.textContent = 'Muted';
+        audioLabel.className = 'text-rose-400';
+      } else {
+        audioIcon.textContent = '🔊';
+        audioLabel.textContent = 'Audio Ready';
+        audioLabel.className = 'text-zinc-200';
+        audio.playPreviewChirp();
+      }
+    });
+
+    // Wake Lock Button
+    wakeLockBtn.addEventListener('click', toggleWakeLock);
+
+    // Keyboard Shortcuts
+    window.addEventListener('keydown', (e) => {
+      if (document.activeElement && document.activeElement.tagName === 'INPUT') return;
+      if (e.repeat) return;
+      if (e.code === 'Space') {
+        e.preventDefault();
+        engageWhistle();
+      } else if (e.key === 'd' || e.key === 'D') {
+        triggerDoubleTweetCadence(false);
+      } else if (e.key === 'ArrowLeft') {
+        goToPage(0);
+      } else if (e.key === 'ArrowRight') {
+        goToPage(1);
+      } else if (e.key === 'p' || e.key === 'P') {
+        toggleShotClock();
+      } else if (e.key === 'r' || e.key === 'R') {
+        resetShotClock(state.shotDuration);
+      }
+    });
+
+    window.addEventListener('keyup', (e) => {
+      if (document.activeElement && document.activeElement.tagName === 'INPUT') return;
+      if (e.code === 'Space') {
+        e.preventDefault();
+        releaseWhistle();
+      }
+    });
+
+    // Initial Render
+    renderShotClock();
+    renderScoreboard();
+  </script>
+</body>
+</html>
