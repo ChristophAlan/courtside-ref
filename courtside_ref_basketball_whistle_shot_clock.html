@@ -1,0 +1,1219 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+  <title>CourtSide Ref - Basketball Whistle & Shot Clock</title>
+
+  <!-- PWA & iOS Standalone Meta Tags -->
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="CourtSide Ref" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="theme-color" content="#050505" />
+
+  <!-- Custom App Icon -->
+  <link id="appleTouchIcon" rel="apple-touch-icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 512 512'%3E%3Crect width='512' height='512' rx='112' fill='%2305070B'/%3E%3Ccircle cx='256' cy='256' r='170' fill='none' stroke='%23FF6B00' stroke-width='28'/%3E%3Cpath d='M165 245h135l55-45v112l-55-45H165z' fill='%23FF6B00'/%3E%3Ccircle cx='215' cy='256' r='36' fill='%2305070B'/%3E%3C/svg%3E" />
+
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+
+  <!-- Google Fonts: Inter -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@500;700;800;900&display=swap" rel="stylesheet" />
+
+  <style>
+    :root {
+      --bg-app: #050505;
+      --bg-panel: #0f1218;
+      --bg-control: #171c26;
+      --border-subtle: rgba(255, 255, 255, 0.08);
+      --text-primary: #f8fafc;
+      --text-muted: #94a3b8;
+      --accent-amber: #f59e0b;
+      --accent-glow: rgba(245, 158, 11, 0.25);
+    }
+
+    html.light-theme {
+      --bg-app: #f4f4f6;
+      --bg-panel: #ffffff;
+      --bg-control: #e8eaef;
+      --border-subtle: rgba(15, 23, 42, 0.1);
+      --text-primary: #0f172a;
+      --text-muted: #475569;
+      --accent-amber: #d97706;
+      --accent-glow: rgba(217, 119, 6, 0.2);
+    }
+
+    * {
+      box-sizing: border-box;
+      -webkit-tap-highlight-color: transparent;
+      user-select: none;
+      -webkit-user-select: none;
+    }
+
+    html, body {
+      margin: 0;
+      padding: 0;
+      width: 100%;
+      height: 100dvh;
+      overflow: hidden;
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+      background-color: var(--bg-app);
+      color: var(--text-primary);
+      touch-action: manipulation;
+    }
+
+    .theme-panel {
+      background-color: var(--bg-panel);
+      border-color: var(--border-subtle);
+    }
+
+    .theme-control {
+      background-color: var(--bg-control);
+      border-color: var(--border-subtle);
+    }
+
+    .theme-text-muted {
+      color: var(--text-muted);
+    }
+
+    .led-digits {
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+      font-variant-numeric: tabular-nums;
+      letter-spacing: -0.04em;
+    }
+
+    .tactile-btn {
+      transition: transform 0.08s ease, background-color 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
+    }
+
+    .tactile-btn:active {
+      transform: scale(0.97);
+    }
+
+    /* Horizontal 3-Page Slider */
+    #pagerTrack {
+      display: flex;
+      width: 300%;
+      height: 100%;
+      transition: transform 0.28s cubic-bezier(0.22, 1, 0.36, 1);
+    }
+
+    .pager-page {
+      width: 33.333333%;
+      height: 100%;
+      flex-shrink: 0;
+      display: flex;
+      flex-direction: column;
+      overflow-y: auto;
+    }
+
+    /* Whistle Pad States */
+    .whistle-pad-idle {
+      background: radial-gradient(circle at 50% 45%, rgba(245, 158, 11, 0.16), rgba(15, 18, 24, 0.96) 72%);
+      border-color: rgba(245, 158, 11, 0.35);
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08), 0 12px 32px rgba(0, 0, 0, 0.45);
+    }
+
+    html.light-theme .whistle-pad-idle {
+      background: radial-gradient(circle at 50% 45%, rgba(245, 158, 11, 0.18), #ffffff 75%);
+      border-color: rgba(217, 119, 6, 0.4);
+      box-shadow: 0 10px 26px rgba(15, 23, 42, 0.08);
+    }
+
+    .whistle-pad-active {
+      background: radial-gradient(circle at 50% 50%, #ef4444 0%, #dc2626 75%, #991b1b 100%) !important;
+      border-color: #fecaca !important;
+      color: #ffffff !important;
+      transform: scale(0.985);
+      box-shadow: 0 0 48px rgba(239, 68, 68, 0.65), inset 0 2px 12px rgba(255, 255, 255, 0.35) !important;
+    }
+
+    @keyframes clockResetFlash {
+      0% { border-color: #f59e0b; box-shadow: 0 0 28px rgba(245, 158, 11, 0.45); }
+      100% { border-color: var(--border-subtle); box-shadow: none; }
+    }
+
+    .clock-reset-flash {
+      animation: clockResetFlash 0.38s ease-out;
+    }
+
+    @keyframes shotClockViolationFlash {
+      0%, 100% {
+        background-color: var(--bg-panel);
+        border-color: rgba(239, 68, 68, 0.7);
+        box-shadow: 0 0 22px rgba(239, 68, 68, 0.35);
+      }
+      50% {
+        background-color: rgba(220, 38, 38, 0.32);
+        border-color: #ef4444;
+        box-shadow: 0 0 42px rgba(239, 68, 68, 0.75);
+      }
+    }
+
+    .clock-violation-flash {
+      animation: shotClockViolationFlash 0.42s ease-in-out 3;
+      border-color: #ef4444 !important;
+    }
+
+    @keyframes fullScreenViolationFlash {
+      0%, 100% {
+        opacity: 0;
+      }
+      50% {
+        opacity: 1;
+      }
+    }
+
+    .screen-violation-flash {
+      animation: fullScreenViolationFlash 0.42s ease-in-out 3;
+    }
+  </style>
+</head>
+<body class="flex flex-col justify-between px-3 pt-[max(0.65rem,env(safe-area-inset-top))] pb-[max(0.65rem,env(safe-area-inset-bottom))]">
+
+  <!-- FULL-SCREEN SHOT CLOCK VIOLATION FLASH OVERLAY -->
+  <div id="violationFlashOverlay"
+    class="fixed inset-0 z-50 pointer-events-none opacity-0 bg-red-600/45 border-[6px] border-red-500 shadow-[inset_0_0_90px_rgba(239,68,68,0.85)]">
+  </div>
+
+  <!-- TOP UTILITY HEADER -->
+  <header class="flex items-center justify-between gap-2 pb-2 shrink-0">
+    <div class="flex items-center gap-2">
+      <span class="w-2.5 h-2.5 rounded-full bg-amber-500 shadow-[0_0_10px_#f59e0b]"></span>
+      <span class="text-xs sm:text-sm font-black tracking-wider uppercase">
+        COURTSIDE <span class="text-amber-500">REF</span>
+      </span>
+    </div>
+
+    <!-- Top-Right Settings Shortcut Pill -->
+    <button id="headerPresetShortcut" type="button"
+      class="tactile-btn theme-control px-3 py-1.5 rounded-full border flex items-center gap-2 text-[11px] font-extrabold tracking-wider uppercase"
+      aria-label="Open Settings">
+      <span id="headerRuleBadge" class="text-amber-500">24S</span>
+      <span class="theme-text-muted">•</span>
+      <span id="headerToneBadge">FOX 40</span>
+      <svg class="w-3.5 h-3.5 text-amber-500 ml-0.5" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+        <path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+      </svg>
+    </button>
+  </header>
+
+  <!-- MAIN 3-PAGE VIEWPORT -->
+  <div class="relative flex-1 w-full overflow-hidden">
+    <main id="pagerTrack">
+
+      <!-- =================================================================== -->
+      <!-- PAGE 1: LIVE SHOT CLOCK + WHISTLE PAD                               -->
+      <!-- =================================================================== -->
+      <section class="pager-page gap-3 pr-1">
+
+        <!-- Tap-to-Reset Shot Clock Card -->
+        <div id="shotClockCard"
+          class="theme-panel rounded-2xl border p-3.5 flex flex-col justify-between shrink-0 cursor-pointer relative overflow-hidden">
+          <div class="flex items-center justify-between z-10">
+            <div class="flex items-center gap-2">
+              <span id="clockStatusDot" class="w-2.5 h-2.5 rounded-full bg-amber-500"></span>
+              <span id="clockStatusLabel" class="text-[11px] font-extrabold uppercase tracking-widest theme-text-muted">
+                READY • TAP DIGITS TO RESET
+              </span>
+            </div>
+
+            <!-- Corner Start / Pause Button -->
+            <button id="clockPauseBtn" type="button"
+              class="tactile-btn theme-control px-3 py-1 rounded-lg border text-[11px] font-black uppercase tracking-wider text-amber-500">
+              START
+            </button>
+          </div>
+
+          <!-- Huge LED Shot Clock Display (Tap anywhere here to instant-reset) -->
+          <div id="shotClockTapArea" class="py-2 flex flex-col items-center justify-center select-none">
+            <div id="shotClockDigits"
+              class="led-digits text-[5.4rem] sm:text-[6.5rem] leading-none font-extrabold text-amber-500 tracking-tight">
+              24
+            </div>
+            <span class="text-[10px] font-bold uppercase tracking-[0.2em] theme-text-muted mt-1">
+              TAP CLOCK FOR NEW POSSESSION
+            </span>
+          </div>
+        </div>
+
+        <!-- Giant Referee Whistle Touch Pad -->
+        <button id="whistlePad" type="button"
+          class="whistle-pad-idle flex-1 w-full rounded-3xl border-2 flex flex-col items-center justify-center gap-3 p-6 relative overflow-hidden cursor-pointer">
+          <div id="whistleRing"
+            class="w-24 h-24 sm:w-28 sm:h-28 rounded-full border-2 border-amber-500/40 flex items-center justify-center bg-amber-500/10 transition-transform duration-100">
+            <svg id="whistleIcon" class="w-12 h-12 sm:w-14 sm:h-14 text-amber-500 transition-colors duration-100" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M19.5 7.5L15 11H4.5A2.5 2.5 0 0 0 2 13.5v1A2.5 2.5 0 0 0 4.5 17h3.1a4.5 4.5 0 0 0 8.8 0h.6l2.5 2a1 1 0 0 0 1.6-.8V8.3a1 1 0 0 0-1.6-.8zM12 17.5a2.5 2.5 0 1 1 0-5 2.5 2.5 0 0 1 0 5z"/>
+            </svg>
+          </div>
+
+          <div class="text-center">
+            <div id="whistleMainText" class="text-2xl sm:text-3xl font-black uppercase tracking-wider">
+              BLOW WHISTLE
+            </div>
+            <div id="whistleSubText" class="text-xs font-bold uppercase tracking-widest theme-text-muted mt-1">
+              HOLD FOR LONG • DOUBLE-TAP FOR 2-TWEET
+            </div>
+          </div>
+        </button>
+
+      </section>
+
+      <!-- =================================================================== -->
+      <!-- PAGE 2: COURTSIDE SCOREBOARD                                        -->
+      <!-- =================================================================== -->
+      <section class="pager-page gap-2.5 px-1 justify-between">
+
+        <!-- HOME TEAM CARD -->
+        <div class="theme-panel rounded-2xl border p-4 flex-1 flex flex-col justify-between">
+          <div class="flex items-center justify-between">
+            <span class="text-sm font-black uppercase tracking-widest text-amber-500">HOME</span>
+            <div class="flex items-center gap-2">
+              <button id="homeFoulBtn" type="button"
+                class="tactile-btn theme-control px-3 py-1.5 rounded-xl border text-xs font-extrabold uppercase tracking-wider">
+                FOULS <span id="homeFoulCount" class="text-amber-500 ml-1">0</span>
+              </button>
+              <button id="homeSubBtn" type="button"
+                class="tactile-btn theme-control px-3 py-1.5 rounded-xl border text-xs font-black theme-text-muted">
+                -1
+              </button>
+            </div>
+          </div>
+
+          <div class="flex items-center justify-center my-auto">
+            <div id="homeScoreDigits" class="led-digits text-7xl sm:text-8xl font-black text-amber-500 leading-none">
+              00
+            </div>
+          </div>
+
+          <div class="grid grid-cols-3 gap-2">
+            <button type="button" data-team="home" data-pts="1"
+              class="score-add-btn tactile-btn theme-control py-3 rounded-xl border text-base font-black">
+              +1
+            </button>
+            <button type="button" data-team="home" data-pts="2"
+              class="score-add-btn tactile-btn theme-control py-3 rounded-xl border text-base font-black text-amber-500">
+              +2
+            </button>
+            <button type="button" data-team="home" data-pts="3"
+              class="score-add-btn tactile-btn theme-control py-3 rounded-xl border text-base font-black text-amber-500">
+              +3
+            </button>
+          </div>
+        </div>
+
+        <!-- CENTER POSSESSION + MINI WHISTLE BAR -->
+        <div class="theme-panel rounded-2xl border px-3 py-2 flex items-center justify-between gap-2 shrink-0">
+          <button id="possessionToggleBtn" type="button"
+            class="tactile-btn theme-control px-3 py-2 rounded-xl border flex items-center gap-2 text-xs font-black uppercase tracking-wider">
+            <span id="possArrowLeft" class="text-base font-black text-amber-500">◀</span>
+            <span>POSS</span>
+            <span id="possArrowRight" class="text-base font-black theme-text-muted opacity-30">▶</span>
+          </button>
+
+          <button id="miniWhistleBtn" type="button"
+            class="tactile-btn flex-1 py-2.5 px-3 rounded-xl bg-amber-500 text-black font-black text-xs uppercase tracking-widest shadow-md">
+            QUICK WHISTLE
+          </button>
+
+          <button id="resetGameBtn" type="button"
+            class="tactile-btn theme-control px-3 py-2 rounded-xl border text-[11px] font-extrabold uppercase tracking-wider text-rose-400">
+            RESET
+          </button>
+        </div>
+
+        <!-- GUEST TEAM CARD -->
+        <div class="theme-panel rounded-2xl border p-4 flex-1 flex flex-col justify-between">
+          <div class="flex items-center justify-between">
+            <span class="text-sm font-black uppercase tracking-widest text-sky-400">GUEST</span>
+            <div class="flex items-center gap-2">
+              <button id="guestFoulBtn" type="button"
+                class="tactile-btn theme-control px-3 py-1.5 rounded-xl border text-xs font-extrabold uppercase tracking-wider">
+                FOULS <span id="guestFoulCount" class="text-sky-400 ml-1">0</span>
+              </button>
+              <button id="guestSubBtn" type="button"
+                class="tactile-btn theme-control px-3 py-1.5 rounded-xl border text-xs font-black theme-text-muted">
+                -1
+              </button>
+            </div>
+          </div>
+
+          <div class="flex items-center justify-center my-auto">
+            <div id="guestScoreDigits" class="led-digits text-7xl sm:text-8xl font-black leading-none">
+              00
+            </div>
+          </div>
+
+          <div class="grid grid-cols-3 gap-2">
+            <button type="button" data-team="guest" data-pts="1"
+              class="score-add-btn tactile-btn theme-control py-3 rounded-xl border text-base font-black">
+              +1
+            </button>
+            <button type="button" data-team="guest" data-pts="2"
+              class="score-add-btn tactile-btn theme-control py-3 rounded-xl border text-base font-black text-sky-400">
+              +2
+            </button>
+            <button type="button" data-team="guest" data-pts="3"
+              class="score-add-btn tactile-btn theme-control py-3 rounded-xl border text-base font-black text-sky-400">
+              +3
+            </button>
+          </div>
+        </div>
+
+      </section>
+
+      <!-- =================================================================== -->
+      <!-- PAGE 3: PRE-GAME SETTINGS & WHISTLE PROFILES                        -->
+      <!-- =================================================================== -->
+      <section class="pager-page gap-3 pl-1">
+
+        <!-- Shot Clock Rules Section -->
+        <div class="theme-panel rounded-2xl border p-4 flex flex-col gap-3">
+          <div class="flex items-center justify-between">
+            <span class="text-xs font-black uppercase tracking-wider">SHOT CLOCK RULE</span>
+            <span class="text-[10px] font-bold uppercase tracking-widest theme-text-muted">TAP-TO-RESET TARGET</span>
+          </div>
+
+          <div class="grid grid-cols-4 gap-2">
+            <button type="button" data-seconds="30"
+              class="rule-btn tactile-btn theme-control py-3 rounded-xl border text-center">
+              <span class="led-digits text-base font-extrabold">30s</span>
+            </button>
+            <button type="button" data-seconds="24"
+              class="rule-btn tactile-btn theme-control py-3 rounded-xl border text-center">
+              <span class="led-digits text-base font-extrabold">24s</span>
+            </button>
+            <button type="button" data-seconds="14"
+              class="rule-btn tactile-btn theme-control py-3 rounded-xl border text-center">
+              <span class="led-digits text-base font-extrabold">14s</span>
+            </button>
+            <button type="button" data-seconds="10"
+              class="rule-btn tactile-btn theme-control py-3 rounded-xl border text-center">
+              <span class="led-digits text-base font-extrabold">10s</span>
+            </button>
+          </div>
+
+          <div class="grid grid-cols-2 gap-2 pt-1">
+            <button id="autoRunToggleBtn" type="button"
+              class="tactile-btn theme-control p-3 rounded-xl border text-left flex flex-col gap-1">
+              <span class="text-[10px] font-bold uppercase tracking-wider theme-text-muted">TAP CLOCK ACTION</span>
+              <span id="autoRunLabel" class="text-xs font-black text-emerald-400 uppercase">RESET & RUN</span>
+            </button>
+
+            <button id="whistlePauseToggleBtn" type="button"
+              class="tactile-btn theme-control p-3 rounded-xl border text-left flex flex-col gap-1">
+              <span class="text-[10px] font-bold uppercase tracking-wider theme-text-muted">WHISTLE AUTO-PAUSE</span>
+              <div class="flex items-center gap-1.5">
+                <span id="whistleLinkDot" class="w-2 h-2 rounded-full bg-slate-500"></span>
+                <span id="whistleLinkLabel" class="text-xs font-black theme-text-muted uppercase">OFF (UNLINKED)</span>
+              </div>
+            </button>
+          </div>
+        </div>
+
+        <!-- Whistle Tone Selector Section -->
+        <div class="theme-panel rounded-2xl border p-4 flex flex-col gap-3">
+          <div class="flex items-center justify-between gap-2">
+            <span class="text-xs font-black uppercase tracking-wider">WHISTLE TONE</span>
+            <span id="activeProfileDesc" class="text-[10px] font-bold text-amber-500 truncate">
+              Pealess Dual-Chamber (2820/3165 Hz)
+            </span>
+          </div>
+
+          <div class="grid grid-cols-2 gap-2">
+            <button type="button" data-profile="fox40"
+              class="profile-btn tactile-btn theme-control py-3.5 px-2 rounded-xl border text-center flex items-center justify-center">
+              <span class="text-xs font-extrabold uppercase tracking-wide">FOX 40 CLASSIC</span>
+            </button>
+            <button type="button" data-profile="cork"
+              class="profile-btn tactile-btn theme-control py-3.5 px-2 rounded-xl border text-center flex items-center justify-center">
+              <span class="text-xs font-extrabold uppercase tracking-wide theme-text-muted">PEA CORK</span>
+            </button>
+            <button type="button" data-profile="sonik"
+              class="profile-btn tactile-btn theme-control py-3.5 px-2 rounded-xl border text-center flex items-center justify-center">
+              <span class="text-xs font-extrabold uppercase tracking-wide theme-text-muted">SONIK BLAST</span>
+            </button>
+            <button type="button" data-profile="chirp"
+              class="profile-btn tactile-btn theme-control py-3.5 px-2 rounded-xl border text-center flex items-center justify-center">
+              <span class="text-xs font-extrabold uppercase tracking-wide theme-text-muted">SHARP CHIRP</span>
+            </button>
+          </div>
+        </div>
+
+      </section>
+
+    </main>
+  </div>
+
+  <!-- BOTTOM 2-TAB NAVIGATION -->
+  <nav class="pt-2 shrink-0 flex items-center justify-center gap-2">
+    <button id="pageDot0" type="button"
+      class="tactile-btn flex-1 max-w-[180px] py-2.5 px-3 rounded-full border border-amber-500/60 bg-amber-500/15 text-amber-500 text-xs font-black uppercase tracking-wider flex items-center justify-center gap-2">
+      <span class="w-2 h-2 rounded-full bg-amber-500"></span>
+      <span>REF & CLOCK</span>
+    </button>
+
+    <button id="pageDot1" type="button"
+      class="tactile-btn flex-1 max-w-[180px] py-2.5 px-3 rounded-full border border-white/10 theme-control theme-text-muted text-xs font-black uppercase tracking-wider flex items-center justify-center gap-2">
+      <span class="w-2 h-2 rounded-full bg-slate-500"></span>
+      <span>SCOREBOARD</span>
+    </button>
+  </nav>
+
+  <script>
+    // =========================================================================
+    // 1. WEB AUDIO SYNTHESIZER ENGINE (ORGANIC REFEREE WHISTLE + BUZZER)
+    // =========================================================================
+    class CourtAudioEngine {
+      constructor() {
+        this.ctx = null;
+        this.activeProfile = localStorage.getItem('courtside_profile') || 'fox40';
+        this.activeNodes = null;
+        this.profiles = {
+          fox40: {
+            label: 'FOX 40',
+            desc: 'Pealess Dual-Chamber (2820/3165 Hz)',
+            f1: 2820,
+            f2: 3165,
+            trillRate: 36,
+            trillDepth: 55
+          },
+          cork: {
+            label: 'PEA CORK',
+            desc: 'Traditional Brass Pea Trill (2540/2790 Hz)',
+            f1: 2540,
+            f2: 2790,
+            trillRate: 28,
+            trillDepth: 95
+          },
+          sonik: {
+            label: 'SONIK',
+            desc: 'High-Output Arena Blast (3050/3440 Hz)',
+            f1: 3050,
+            f2: 3440,
+            trillRate: 42,
+            trillDepth: 65
+          },
+          chirp: {
+            label: 'CHIRP',
+            desc: 'Crisp Youth Court Tone (2920/3210 Hz)',
+            f1: 2920,
+            f2: 3210,
+            trillRate: 32,
+            trillDepth: 42
+          }
+        };
+      }
+
+      ensureContext() {
+        if (!this.ctx) {
+          const AudioCtx = window.AudioContext || window.webkitAudioContext;
+          this.ctx = new AudioCtx();
+        }
+        if (this.ctx.state === 'suspended') {
+          this.ctx.resume().catch(() => {});
+        }
+      }
+
+      startWhistle(pitchOffset = 0, gainBoost = 1.0, trillBoost = 1.0) {
+        this.ensureContext();
+        this.stopWhistle(true);
+
+        const now = this.ctx.currentTime;
+        const p = this.profiles[this.activeProfile] || this.profiles.fox40;
+        const f1Target = p.f1 + pitchOffset;
+        const f2Target = p.f2 + pitchOffset;
+
+        // Primary & Secondary Resonant Chambers
+        const osc1 = this.ctx.createOscillator();
+        const osc2 = this.ctx.createOscillator();
+        osc1.type = 'sine';
+        osc2.type = 'triangle';
+
+        // Natural initial breath scoop (-45 Hz up to target over 35ms) + sustained diaphragm rise
+        osc1.frequency.setValueAtTime(f1Target - 45, now);
+        osc1.frequency.exponentialRampToValueAtTime(f1Target, now + 0.035);
+        osc1.frequency.linearRampToValueAtTime(f1Target + 24, now + 0.55);
+
+        osc2.frequency.setValueAtTime(f2Target - 45, now);
+        osc2.frequency.exponentialRampToValueAtTime(f2Target, now + 0.035);
+        osc2.frequency.linearRampToValueAtTime(f2Target + 26, now + 0.55);
+
+        // Pea / Air Turbulence LFO
+        const lfo = this.ctx.createOscillator();
+        const lfoGain = this.ctx.createGain();
+        lfo.type = 'sine';
+        lfo.frequency.setValueAtTime(p.trillRate * trillBoost, now);
+        lfoGain.gain.setValueAtTime(p.trillDepth * trillBoost, now);
+        lfo.connect(lfoGain);
+        lfoGain.connect(osc1.frequency);
+        lfoGain.connect(osc2.frequency);
+
+        // Filtered Breath Air Noise
+        const bufferSize = this.ctx.sampleRate * 1.5;
+        const noiseBuffer = this.ctx.createBuffer(1, bufferSize, this.ctx.sampleRate);
+        const data = noiseBuffer.getChannelData(0);
+        for (let i = 0; i < bufferSize; i++) {
+          data[i] = Math.random() * 2 - 1;
+        }
+        const noise = this.ctx.createBufferSource();
+        noise.buffer = noiseBuffer;
+        noise.loop = true;
+
+        const bandpass = this.ctx.createBiquadFilter();
+        bandpass.type = 'bandpass';
+        bandpass.frequency.setValueAtTime(f1Target, now);
+        bandpass.Q.setValueAtTime(4.5, now);
+
+        const noiseGain = this.ctx.createGain();
+        noiseGain.gain.setValueAtTime(0.06 * gainBoost, now);
+
+        // Master Envelope
+        const masterGain = this.ctx.createGain();
+        const peakGain = Math.min(0.42, 0.34 * gainBoost);
+        masterGain.gain.setValueAtTime(0.001, now);
+        masterGain.gain.linearRampToValueAtTime(peakGain, now + 0.025);
+
+        osc1.connect(masterGain);
+        osc2.connect(masterGain);
+        noise.connect(bandpass);
+        bandpass.connect(noiseGain);
+        noiseGain.connect(masterGain);
+        masterGain.connect(this.ctx.destination);
+
+        osc1.start(now);
+        osc2.start(now);
+        lfo.start(now);
+        noise.start(now);
+
+        this.activeNodes = { osc1, osc2, lfo, noise, masterGain, noiseGain };
+      }
+
+      stopWhistle(immediate = false) {
+        if (!this.activeNodes || !this.ctx) return;
+        const nodes = this.activeNodes;
+        this.activeNodes = null;
+        const now = this.ctx.currentTime;
+
+        if (immediate) {
+          try {
+            nodes.osc1.stop(now);
+            nodes.osc2.stop(now);
+            nodes.lfo.stop(now);
+            nodes.noise.stop(now);
+          } catch (_) {}
+          return;
+        }
+
+        // Audible 210ms two-stage acoustic release + pitch sag
+        try {
+          nodes.osc1.frequency.cancelScheduledValues(now);
+          nodes.osc2.frequency.cancelScheduledValues(now);
+          nodes.osc1.frequency.setValueAtTime(nodes.osc1.frequency.value, now);
+          nodes.osc2.frequency.setValueAtTime(nodes.osc2.frequency.value, now);
+          nodes.osc1.frequency.linearRampToValueAtTime(nodes.osc1.frequency.value - 115, now + 0.21);
+          nodes.osc2.frequency.linearRampToValueAtTime(nodes.osc2.frequency.value - 115, now + 0.21);
+
+          nodes.masterGain.gain.cancelScheduledValues(now);
+          nodes.masterGain.gain.setValueAtTime(nodes.masterGain.gain.value, now);
+          nodes.masterGain.gain.linearRampToValueAtTime(nodes.masterGain.gain.value * 0.42, now + 0.085);
+          nodes.masterGain.gain.exponentialRampToValueAtTime(0.0001, now + 0.21);
+
+          const stopAt = now + 0.22;
+          nodes.osc1.stop(stopAt);
+          nodes.osc2.stop(stopAt);
+          nodes.lfo.stop(stopAt);
+          nodes.noise.stop(stopAt);
+        } catch (_) {}
+      }
+
+      playShortChirp() {
+        this.startWhistle(0, 0.85, 1.0);
+        setTimeout(() => this.stopWhistle(false), 115);
+      }
+
+      playDoubleBlast() {
+        // First tap already played the first tweet; play the accented second tweet cleanly
+        this.stopWhistle(true);
+        isWhistling = true;
+        setWhistleVisual(true);
+        this.startWhistle(48, 1.05, 1.07);
+        setTimeout(() => {
+          isWhistling = false;
+          setWhistleVisual(false);
+          this.stopWhistle(false);
+        }, 175);
+      }
+
+      playWarningChirp() {
+        this.ensureContext();
+        const now = this.ctx.currentTime;
+        const osc = this.ctx.createOscillator();
+        const gain = this.ctx.createGain();
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(980, now);
+        gain.gain.setValueAtTime(0.08, now);
+        gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.06);
+        osc.connect(gain);
+        gain.connect(this.ctx.destination);
+        osc.start(now);
+        osc.stop(now + 0.065);
+      }
+
+      playBuzzer() {
+        this.ensureContext();
+        const now = this.ctx.currentTime;
+        const freqs = [145, 218, 290];
+        freqs.forEach((f) => {
+          const osc = this.ctx.createOscillator();
+          const gain = this.ctx.createGain();
+          osc.type = 'sawtooth';
+          osc.frequency.setValueAtTime(f, now);
+          gain.gain.setValueAtTime(0.18, now);
+          gain.gain.setValueAtTime(0.18, now + 0.72);
+          gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.92);
+          osc.connect(gain);
+          gain.connect(this.ctx.destination);
+          osc.start(now);
+          osc.stop(now + 0.95);
+        });
+      }
+    }
+
+    // =========================================================================
+    // 2. STATE & DOM REFERENCES
+    // =========================================================================
+    const audioEngine = new CourtAudioEngine();
+
+    let currentPage = 0;
+    let activeRuleSeconds = Number(localStorage.getItem('courtside_rule_sec')) || 24;
+    let remainingTenths = activeRuleSeconds * 10;
+    let clockRunning = false;
+    let clockInterval = null;
+    let autoRunOnReset = localStorage.getItem('courtside_autorun') !== 'false';
+    let whistlePausesClock = localStorage.getItem('courtside_whistle_pause') === 'true';
+
+    let isWhistling = false;
+    let lastTapTime = 0;
+
+    const gameState = {
+      homeScore: 0,
+      guestScore: 0,
+      homeFouls: 0,
+      guestFouls: 0,
+      possession: 'home'
+    };
+
+    // DOM Elements
+    const pagerTrack = document.getElementById('pagerTrack');
+    const pageDot0 = document.getElementById('pageDot0');
+    const pageDot1 = document.getElementById('pageDot1');
+    const violationFlashOverlay = document.getElementById('violationFlashOverlay');
+    const headerPresetShortcut = document.getElementById('headerPresetShortcut');
+    const headerRuleBadge = document.getElementById('headerRuleBadge');
+    const headerToneBadge = document.getElementById('headerToneBadge');
+
+    const shotClockCard = document.getElementById('shotClockCard');
+    const shotClockTapArea = document.getElementById('shotClockTapArea');
+    const shotClockDigits = document.getElementById('shotClockDigits');
+    const clockPauseBtn = document.getElementById('clockPauseBtn');
+    const clockStatusDot = document.getElementById('clockStatusDot');
+    const clockStatusLabel = document.getElementById('clockStatusLabel');
+
+    const whistlePad = document.getElementById('whistlePad');
+    const whistleRing = document.getElementById('whistleRing');
+    const whistleIcon = document.getElementById('whistleIcon');
+    const whistleMainText = document.getElementById('whistleMainText');
+    const whistleSubText = document.getElementById('whistleSubText');
+
+    const homeScoreDigits = document.getElementById('homeScoreDigits');
+    const guestScoreDigits = document.getElementById('guestScoreDigits');
+    const homeFoulCount = document.getElementById('homeFoulCount');
+    const guestFoulCount = document.getElementById('guestFoulCount');
+    const homeFoulBtn = document.getElementById('homeFoulBtn');
+    const guestFoulBtn = document.getElementById('guestFoulBtn');
+    const homeSubBtn = document.getElementById('homeSubBtn');
+    const guestSubBtn = document.getElementById('guestSubBtn');
+    const scoreAddBtns = document.querySelectorAll('.score-add-btn');
+    const possessionToggleBtn = document.getElementById('possessionToggleBtn');
+    const possArrowLeft = document.getElementById('possArrowLeft');
+    const possArrowRight = document.getElementById('possArrowRight');
+    const miniWhistleBtn = document.getElementById('miniWhistleBtn');
+    const resetGameBtn = document.getElementById('resetGameBtn');
+
+    const ruleBtns = document.querySelectorAll('.rule-btn');
+    const autoRunToggleBtn = document.getElementById('autoRunToggleBtn');
+    const autoRunLabel = document.getElementById('autoRunLabel');
+    const whistlePauseToggleBtn = document.getElementById('whistlePauseToggleBtn');
+    const whistleLinkDot = document.getElementById('whistleLinkDot');
+    const whistleLinkLabel = document.getElementById('whistleLinkLabel');
+    const activeProfileDesc = document.getElementById('activeProfileDesc');
+    const profileButtons = document.querySelectorAll('.profile-btn');
+
+    function triggerHaptic(ms = 15) {
+      if (navigator.vibrate) {
+        try { navigator.vibrate(ms); } catch (_) {}
+      }
+    }
+
+    // =========================================================================
+    // 3. NAVIGATION & PAGER
+    // =========================================================================
+    function navigateToPage(pageIdx) {
+      currentPage = Math.max(0, Math.min(2, pageIdx));
+      pagerTrack.style.transform = `translateX(-${currentPage * 33.333333}%)`;
+
+      const activeTabClass = 'tactile-btn flex-1 max-w-[180px] py-2.5 px-3 rounded-full border border-amber-500/60 bg-amber-500/15 text-amber-500 text-xs font-black uppercase tracking-wider flex items-center justify-center gap-2';
+      const inactiveTabClass = 'tactile-btn flex-1 max-w-[180px] py-2.5 px-3 rounded-full border border-white/10 theme-control theme-text-muted text-xs font-black uppercase tracking-wider flex items-center justify-center gap-2';
+
+      pageDot0.className = currentPage === 0 ? activeTabClass : inactiveTabClass;
+      pageDot0.querySelector('span').className = currentPage === 0 ? 'w-2 h-2 rounded-full bg-amber-500' : 'w-2 h-2 rounded-full bg-slate-500';
+
+      pageDot1.className = currentPage === 1 ? activeTabClass : inactiveTabClass;
+      pageDot1.querySelector('span').className = currentPage === 1 ? 'w-2 h-2 rounded-full bg-amber-500' : 'w-2 h-2 rounded-full bg-slate-500';
+
+      headerPresetShortcut.classList.toggle('border-amber-500', currentPage === 2);
+    }
+
+    // =========================================================================
+    // 4. SHOT CLOCK LOGIC
+    // =========================================================================
+    function updateClockDisplay() {
+      const totalSec = remainingTenths / 10;
+      if (remainingTenths <= 0) {
+        shotClockDigits.textContent = '0.0';
+      } else if (totalSec < 5) {
+        shotClockDigits.textContent = totalSec.toFixed(1);
+      } else {
+        shotClockDigits.textContent = Math.ceil(totalSec).toString().padStart(2, '0');
+      }
+
+      if (remainingTenths <= 50) {
+        shotClockDigits.classList.remove('text-amber-500');
+        shotClockDigits.classList.add('text-rose-500');
+      } else {
+        shotClockDigits.classList.remove('text-rose-500');
+        shotClockDigits.classList.add('text-amber-500');
+      }
+
+      if (clockRunning) {
+        clockPauseBtn.textContent = 'PAUSE';
+        clockStatusDot.className = 'w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse';
+        clockStatusLabel.textContent = 'RUNNING • TAP DIGITS TO RESET';
+      } else if (remainingTenths === 0) {
+        clockPauseBtn.textContent = 'RESET';
+        clockStatusDot.className = 'w-2.5 h-2.5 rounded-full bg-rose-500 animate-ping';
+        clockStatusLabel.textContent = 'VIOLATION • TAP TO RESET';
+      } else {
+        clockPauseBtn.textContent = remainingTenths === activeRuleSeconds * 10 ? 'START' : 'RESUME';
+        clockStatusDot.className = 'w-2.5 h-2.5 rounded-full bg-amber-500';
+        clockStatusLabel.textContent = 'PAUSED • TAP DIGITS TO RESET';
+      }
+    }
+
+    function startShotClock() {
+      if (clockRunning) return;
+      shotClockCard.classList.remove('clock-violation-flash');
+      violationFlashOverlay.classList.remove('screen-violation-flash');
+      if (remainingTenths <= 0) {
+        remainingTenths = activeRuleSeconds * 10;
+      }
+      clockRunning = true;
+      updateClockDisplay();
+
+      clockInterval = setInterval(() => {
+        if (remainingTenths > 0) {
+          remainingTenths -= 1;
+          if (remainingTenths <= 50 && remainingTenths > 0 && remainingTenths % 10 === 0) {
+            audioEngine.playWarningChirp();
+          }
+          updateClockDisplay();
+          if (remainingTenths === 0) {
+            pauseShotClock();
+            shotClockCard.classList.remove('clock-violation-flash');
+            violationFlashOverlay.classList.remove('screen-violation-flash');
+            void violationFlashOverlay.offsetWidth;
+            shotClockCard.classList.add('clock-violation-flash');
+            violationFlashOverlay.classList.add('screen-violation-flash');
+            triggerHaptic([140, 60, 180]);
+            audioEngine.playBuzzer();
+          }
+        }
+      }, 100);
+    }
+
+    function pauseShotClock() {
+      clockRunning = false;
+      if (clockInterval) {
+        clearInterval(clockInterval);
+        clockInterval = null;
+      }
+      updateClockDisplay();
+    }
+
+    function toggleShotClock() {
+      if (clockRunning) {
+        pauseShotClock();
+      } else {
+        startShotClock();
+      }
+    }
+
+    function resetShotClock(seconds = activeRuleSeconds, shouldRun = autoRunOnReset) {
+      remainingTenths = seconds * 10;
+      shotClockCard.classList.remove('clock-violation-flash', 'clock-reset-flash');
+      violationFlashOverlay.classList.remove('screen-violation-flash');
+      void shotClockCard.offsetWidth;
+      shotClockCard.classList.add('clock-reset-flash');
+
+      if (shouldRun) {
+        if (!clockRunning) startShotClock();
+      } else {
+        pauseShotClock();
+      }
+      updateClockDisplay();
+    }
+
+    // =========================================================================
+    // 5. WHISTLE INTERACTION
+    // =========================================================================
+    function setWhistleVisual(active) {
+      if (active) {
+        whistlePad.classList.remove('whistle-pad-idle');
+        whistlePad.classList.add('whistle-pad-active');
+        whistleRing.className = 'w-24 h-24 sm:w-28 sm:h-28 rounded-full border-2 border-white/70 flex items-center justify-center bg-white/20 scale-110 transition-transform duration-100';
+        whistleIcon.classList.remove('text-amber-500');
+        whistleIcon.classList.add('text-white');
+        whistleSubText.classList.remove('theme-text-muted');
+        whistleSubText.classList.add('text-white/90');
+        whistleMainText.textContent = 'WHISTLING!';
+      } else {
+        whistlePad.classList.remove('whistle-pad-active');
+        whistlePad.classList.add('whistle-pad-idle');
+        whistleRing.className = 'w-24 h-24 sm:w-28 sm:h-28 rounded-full border-2 border-amber-500/40 flex items-center justify-center bg-amber-500/10 transition-transform duration-100';
+        whistleIcon.classList.remove('text-white');
+        whistleIcon.classList.add('text-amber-500');
+        whistleSubText.classList.remove('text-white/90');
+        whistleSubText.classList.add('theme-text-muted');
+        whistleMainText.textContent = 'BLOW WHISTLE';
+      }
+    }
+
+    function startWhistle() {
+      if (isWhistling) return;
+      isWhistling = true;
+      triggerHaptic(35);
+      setWhistleVisual(true);
+      audioEngine.startWhistle();
+
+      if (whistlePausesClock && clockRunning) {
+        pauseShotClock();
+      }
+    }
+
+    function stopWhistle() {
+      if (!isWhistling) return;
+      isWhistling = false;
+      setWhistleVisual(false);
+      audioEngine.stopWhistle(false);
+    }
+
+    function triggerDoubleWhistle() {
+      triggerHaptic(30);
+      audioEngine.playDoubleBlast();
+      if (whistlePausesClock && clockRunning) {
+        pauseShotClock();
+      }
+    }
+
+    // =========================================================================
+    // 6. SCOREBOARD & SETTINGS HELPERS
+    // =========================================================================
+    function updateScoreboardUI() {
+      homeScoreDigits.textContent = String(gameState.homeScore).padStart(2, '0');
+      guestScoreDigits.textContent = String(gameState.guestScore).padStart(2, '0');
+      homeFoulCount.textContent = gameState.homeFouls;
+      guestFoulCount.textContent = gameState.guestFouls;
+
+      const isHome = gameState.possession === 'home';
+      possArrowLeft.className = isHome
+        ? 'text-base font-black text-amber-500'
+        : 'text-base font-black theme-text-muted opacity-30';
+      possArrowRight.className = !isHome
+        ? 'text-base font-black text-amber-500'
+        : 'text-base font-black theme-text-muted opacity-30';
+    }
+
+    function updateSettingsUI() {
+      headerRuleBadge.textContent = `${activeRuleSeconds}S`;
+      ruleBtns.forEach((btn) => {
+        const isSelected = Number(btn.dataset.seconds) === activeRuleSeconds;
+        btn.classList.toggle('border-amber-500', isSelected);
+        btn.classList.toggle('bg-amber-500/15', isSelected);
+        btn.classList.toggle('text-amber-500', isSelected);
+      });
+
+      autoRunLabel.textContent = autoRunOnReset ? 'RESET & RUN' : 'RESET & HOLD';
+      autoRunLabel.className = autoRunOnReset
+        ? 'text-xs font-black text-emerald-400 uppercase'
+        : 'text-xs font-black text-amber-500 uppercase';
+
+      whistleLinkDot.className = whistlePausesClock
+        ? 'w-2 h-2 rounded-full bg-amber-500'
+        : 'w-2 h-2 rounded-full bg-slate-500';
+      whistleLinkLabel.textContent = whistlePausesClock ? 'ON (PAUSES CLOCK)' : 'OFF (UNLINKED)';
+      whistleLinkLabel.className = whistlePausesClock
+        ? 'text-xs font-black text-amber-500 uppercase'
+        : 'text-xs font-black theme-text-muted uppercase';
+    }
+
+    function selectWhistleProfile(profileKey, playPreview = false) {
+      if (!audioEngine.profiles[profileKey]) return;
+      audioEngine.activeProfile = profileKey;
+      localStorage.setItem('courtside_profile', profileKey);
+
+      const profile = audioEngine.profiles[profileKey];
+      headerToneBadge.textContent = profile.label;
+      activeProfileDesc.textContent = profile.desc;
+
+      profileButtons.forEach((btn) => {
+        const isSelected = btn.dataset.profile === profileKey;
+        btn.classList.toggle('border-amber-500', isSelected);
+        btn.classList.toggle('bg-amber-500/15', isSelected);
+        const span = btn.querySelector('span');
+        if (span) {
+          span.className = isSelected
+            ? 'text-xs font-extrabold uppercase tracking-wide text-amber-500'
+            : 'text-xs font-extrabold uppercase tracking-wide theme-text-muted';
+        }
+      });
+
+      if (playPreview) {
+        audioEngine.playShortChirp();
+      }
+    }
+
+    // =========================================================================
+    // 7. EVENT LISTENERS
+    // =========================================================================
+    headerPresetShortcut.addEventListener('click', () => {
+      triggerHaptic(12);
+      navigateToPage(currentPage === 2 ? 0 : 2);
+    });
+
+    pageDot0.addEventListener('click', () => {
+      triggerHaptic(12);
+      navigateToPage(0);
+    });
+
+    pageDot1.addEventListener('click', () => {
+      triggerHaptic(12);
+      navigateToPage(1);
+    });
+
+    // Shot Clock Tap-to-Reset & Pause
+    shotClockTapArea.addEventListener('click', () => {
+      triggerHaptic(22);
+      resetShotClock(activeRuleSeconds, autoRunOnReset);
+    });
+
+    clockPauseBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      triggerHaptic(18);
+      toggleShotClock();
+    });
+
+    // Whistle Touch & Mouse Controls (with Double-Tap Detection)
+    whistlePad.addEventListener('pointerdown', (e) => {
+      e.preventDefault();
+      const now = Date.now();
+      if (now - lastTapTime < 280) {
+        lastTapTime = 0;
+        triggerDoubleWhistle();
+      } else {
+        lastTapTime = now;
+        startWhistle();
+      }
+    });
+
+    window.addEventListener('pointerup', () => {
+      if (isWhistling) stopWhistle();
+    });
+
+    window.addEventListener('pointercancel', () => {
+      if (isWhistling) stopWhistle();
+    });
+
+    // Scoreboard Controls
+    scoreAddBtns.forEach((btn) => {
+      btn.addEventListener('click', () => {
+        triggerHaptic(15);
+        const team = btn.dataset.team;
+        const pts = Number(btn.dataset.pts);
+        if (team === 'home') {
+          gameState.homeScore += pts;
+        } else {
+          gameState.guestScore += pts;
+        }
+        updateScoreboardUI();
+      });
+    });
+
+    homeSubBtn.addEventListener('click', () => {
+      triggerHaptic(12);
+      gameState.homeScore = Math.max(0, gameState.homeScore - 1);
+      updateScoreboardUI();
+    });
+
+    guestSubBtn.addEventListener('click', () => {
+      triggerHaptic(12);
+      gameState.guestScore = Math.max(0, gameState.guestScore - 1);
+      updateScoreboardUI();
+    });
+
+    homeFoulBtn.addEventListener('click', () => {
+      triggerHaptic(15);
+      gameState.homeFouls = (gameState.homeFouls + 1) % 10;
+      updateScoreboardUI();
+    });
+
+    guestFoulBtn.addEventListener('click', () => {
+      triggerHaptic(15);
+      gameState.guestFouls = (gameState.guestFouls + 1) % 10;
+      updateScoreboardUI();
+    });
+
+    possessionToggleBtn.addEventListener('click', () => {
+      triggerHaptic(15);
+      gameState.possession = gameState.possession === 'home' ? 'guest' : 'home';
+      updateScoreboardUI();
+    });
+
+    miniWhistleBtn.addEventListener('click', () => {
+      triggerHaptic(25);
+      audioEngine.playShortChirp();
+      if (whistlePausesClock && clockRunning) {
+        pauseShotClock();
+      }
+    });
+
+    resetGameBtn.addEventListener('click', () => {
+      triggerHaptic(25);
+      gameState.homeScore = 0;
+      gameState.guestScore = 0;
+      gameState.homeFouls = 0;
+      gameState.guestFouls = 0;
+      updateScoreboardUI();
+    });
+
+    // Settings Controls
+    ruleBtns.forEach((btn) => {
+      btn.addEventListener('click', () => {
+        triggerHaptic(15);
+        activeRuleSeconds = Number(btn.dataset.seconds);
+        localStorage.setItem('courtside_rule_sec', String(activeRuleSeconds));
+        pauseShotClock();
+        remainingTenths = activeRuleSeconds * 10;
+        updateSettingsUI();
+        updateClockDisplay();
+      });
+    });
+
+    autoRunToggleBtn.addEventListener('click', () => {
+      triggerHaptic(15);
+      autoRunOnReset = !autoRunOnReset;
+      localStorage.setItem('courtside_autorun', String(autoRunOnReset));
+      updateSettingsUI();
+    });
+
+    whistlePauseToggleBtn.addEventListener('click', () => {
+      triggerHaptic(15);
+      whistlePausesClock = !whistlePausesClock;
+      localStorage.setItem('courtside_whistle_pause', String(whistlePausesClock));
+      updateSettingsUI();
+    });
+
+    profileButtons.forEach((btn) => {
+      btn.addEventListener('click', () => {
+        triggerHaptic(15);
+        selectWhistleProfile(btn.dataset.profile, true);
+      });
+    });
+
+    // Keyboard Shortcuts
+    window.addEventListener('keydown', (e) => {
+      if (e.code === 'Space') {
+        e.preventDefault();
+        if (!e.repeat) startWhistle();
+      } else if (e.key === 'd' || e.key === 'D') {
+        triggerDoubleWhistle();
+      } else if (e.key === 'r' || e.key === 'R') {
+        resetShotClock(activeRuleSeconds, autoRunOnReset);
+      } else if (e.key === 'p' || e.key === 'P') {
+        toggleShotClock();
+      }
+    });
+
+    window.addEventListener('keyup', (e) => {
+      if (e.code === 'Space') {
+        stopWhistle();
+      }
+    });
+
+    // =========================================================================
+    // 8. INITIALIZATION & PWA MANIFEST / SERVICE WORKER
+    // =========================================================================
+    updateSettingsUI();
+    selectWhistleProfile(audioEngine.activeProfile, false);
+    updateClockDisplay();
+    updateScoreboardUI();
+    navigateToPage(0);
+
+    // Dynamic Web App Manifest for Standalone Home-Screen Install
+    const manifestData = {
+      name: 'CourtSide Ref',
+      short_name: 'CourtSide',
+      start_url: './',
+      display: 'standalone',
+      orientation: 'portrait',
+      background_color: '#050505',
+      theme_color: '#050505',
+      icons: [
+        {
+          src: document.getElementById('appleTouchIcon').href,
+          sizes: '512x512',
+          type: 'image/svg+xml',
+          purpose: 'any maskable'
+        }
+      ]
+    };
+    const manifestBlob = new Blob([JSON.stringify(manifestData)], { type: 'application/manifest+json' });
+    const manifestLink = document.createElement('link');
+    manifestLink.rel = 'manifest';
+    manifestLink.href = URL.createObjectURL(manifestBlob);
+    document.head.appendChild(manifestLink);
+
+    // Offline Service Worker Registration
+    if ('serviceWorker' in navigator && window.location.protocol.startsWith('http')) {
+      const swCode = `
+        const CACHE_NAME = 'courtside-ref-v2';
+        self.addEventListener('install', (e) => {
+          e.waitUntil(caches.open(CACHE_NAME).then((cache) => cache.addAll(['./'])));
+          self.skipWaiting();
+        });
+        self.addEventListener('fetch', (e) => {
+          e.respondWith(
+            caches.match(e.request).then((res) => res || fetch(e.request).catch(() => caches.match('./')))
+          );
+        });
+      `;
+      const swBlob = new Blob([swCode], { type: 'application/javascript' });
+      navigator.serviceWorker.register(URL.createObjectURL(swBlob)).catch(() => {});
+    }
+  </script>
+</body>
+</html>
